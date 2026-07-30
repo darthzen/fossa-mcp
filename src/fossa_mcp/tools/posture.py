@@ -8,6 +8,7 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..models import PostureInput, PostureResponse
+from ..query import split_revision_locator
 
 
 async def project_posture(
@@ -31,10 +32,18 @@ async def project_posture(
     lifespan_ctx = ctx.request_context.lifespan_context
     client: FossaClient = lifespan_ctx["client"]
 
+    # The issue endpoints and the dependencies endpoint want different forms of
+    # the same revision (see split_revision_locator): bare id under
+    # scope[revision], full locator in the path. This tool calls both, so it
+    # needs both.
+    full_revision_locator, revision_id = split_revision_locator(
+        validated.project_locator, validated.revision_locator
+    )
+
     scope_params = [
         ("scope[type]", "project"),
         ("scope[id]", validated.project_locator),
-        ("scope[revision]", validated.revision_locator),
+        ("scope[revision]", revision_id),
     ]
 
     async def issue_category_counts() -> tuple[int, Any]:
@@ -54,7 +63,7 @@ async def project_posture(
         return await client.request_json_with_status("GET", "/v2/issues", params=params)
 
     async def direct_dependencies_with_issues() -> Any:
-        encoded_locator = quote(validated.revision_locator, safe="")
+        encoded_locator = quote(full_revision_locator, safe="")
         params = [
             ("depth[]", "direct"),
             ("hasIssues[]", "hasIssues"),
@@ -105,7 +114,7 @@ async def project_posture(
 
     return PostureResponse(
         project_locator=validated.project_locator,
-        revision_locator=validated.revision_locator,
+        revision_locator=full_revision_locator,
         issue_counts=issue_counts,
         top_vulnerability_issues=top_vulnerability_issues,
         top_licensing_issues=top_licensing_issues,

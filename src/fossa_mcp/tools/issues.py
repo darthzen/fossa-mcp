@@ -18,7 +18,7 @@ from ..models import (
     Severity,
     SeveritySource,
 )
-from ..query import add_repeated, bool_to_str
+from ..query import add_repeated, bool_to_str, split_revision_locator
 
 
 async def list_issues(
@@ -115,12 +115,18 @@ def _build_issue_query(validated: IssueListInput) -> list[tuple[str, str]]:
         # project scope.
         assert validated.project_locator is not None
         assert validated.revision_locator is not None
+        _, revision_id = split_revision_locator(
+            validated.project_locator, validated.revision_locator
+        )
         params.append(("scope[id]", validated.project_locator))
-        params.append(("scope[revision]", validated.revision_locator))
+        params.append(("scope[revision]", revision_id))
 
         if validated.compare_to_revision is not None:
             assert validated.change_status is not None
-            params.append(("scope[compareTo][revision]", validated.compare_to_revision))
+            _, compare_id = split_revision_locator(
+                validated.project_locator, validated.compare_to_revision
+            )
+            params.append(("scope[compareTo][revision]", compare_id))
             params.append(("scope[compareTo][changeStatus]", validated.change_status))
 
     issue_id_strs = [str(i) for i in validated.issue_ids] if validated.issue_ids else None
@@ -190,8 +196,9 @@ async def get_issue(
     if scope_type == "project":
         assert project_locator is not None
         assert revision_locator is not None
+        _, revision_id = split_revision_locator(project_locator, revision_locator)
         params.append(("scope[id]", project_locator))
-        params.append(("scope[revision]", revision_locator))
+        params.append(("scope[revision]", revision_id))
 
     result = await client.request_json("GET", f"/v2/issues/{issue_id}", params=params)
 
