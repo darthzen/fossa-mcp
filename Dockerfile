@@ -7,6 +7,11 @@
 ARG PYTHON_BASE=registry.suse.com/bci/python:3.13
 ARG UV_VERSION=0.11.32
 
+# uv comes from its own published image. This has to be a named stage: `COPY
+# --from=` does not expand variables, so `--from=ghcr.io/astral-sh/uv:${UV_VERSION}`
+# fails to build, while `FROM` does expand ARGs from the global scope.
+FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
 # ---------------------------------------------------------------------------
 # Builder: resolve the locked dependency set and install the project with uv.
 # Nothing in this stage ships in the runtime image except the venv and the
@@ -14,7 +19,7 @@ ARG UV_VERSION=0.11.32
 # ---------------------------------------------------------------------------
 FROM ${PYTHON_BASE} AS builder
 
-COPY --from=ghcr.io/astral-sh/uv:${UV_VERSION} /uv /uvx /usr/local/bin/
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
