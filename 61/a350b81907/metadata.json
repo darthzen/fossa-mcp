@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "61a350b81907",
+  "strategy": "manual-commit",
+  "branch": "licensing-and-decisions",
+  "checkpoints_count": 8,
+  "files_touched": [
+    ".gitignore",
+    "DECISIONS.md",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "pyproject.toml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/61/a350b81907/0/metadata.json",
+      "transcript": "/61/a350b81907/0/full.jsonl",
+      "compact_transcript": "/61/a350b81907/0/transcript.jsonl",
+      "content_hash": "/61/a350b81907/0/content_hash.txt",
+      "prompt": "/61/a350b81907/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 130,
+    "cache_creation_tokens": 153668,
+    "cache_read_tokens": 8661913,
+    "output_tokens": 87275,
+    "api_call_count": 71
+  }
+}
