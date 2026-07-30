@@ -1,0 +1,57 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "b80b391df8af",
+  "strategy": "manual-commit",
+  "branch": "licensing-and-decisions",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".dockerignore",
+    "Dockerfile",
+    "IMPLEMENTATION_SUMMARY.md",
+    "README.md",
+    "pyproject.toml",
+    "scripts/generate_third_party_licenses.py",
+    "scripts/update_openapi.py",
+    "src/fossa_mcp/__init__.py",
+    "src/fossa_mcp/__main__.py",
+    "src/fossa_mcp/client.py",
+    "src/fossa_mcp/config.py",
+    "src/fossa_mcp/errors.py",
+    "src/fossa_mcp/models.py",
+    "src/fossa_mcp/query.py",
+    "src/fossa_mcp/server.py",
+    "src/fossa_mcp/tools/__init__.py",
+    "src/fossa_mcp/tools/dependencies.py",
+    "src/fossa_mcp/tools/issues.py",
+    "src/fossa_mcp/tools/posture.py",
+    "src/fossa_mcp/tools/projects.py",
+    "src/fossa_mcp/tools/reports.py",
+    "src/fossa_mcp/tools/revisions.py",
+    "tests/conftest.py",
+    "tests/test_client.py",
+    "tests/test_live.py",
+    "tests/test_mcp_integration.py",
+    "tests/test_models.py",
+    "tests/test_posture.py",
+    "tests/test_query.py",
+    "tests/test_reports.py",
+    "tests/test_tools.py",
+    "uv.lock"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b8/0b391df8af/0/metadata.json",
+      "transcript": "/b8/0b391df8af/0/full.jsonl",
+      "compact_transcript": "/b8/0b391df8af/0/transcript.jsonl",
+      "content_hash": "/b8/0b391df8af/0/content_hash.txt",
+      "prompt": "/b8/0b391df8af/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 409,
+    "cache_creation_tokens": 335292,
+    "cache_read_tokens": 41716145,
+    "output_tokens": 141064,
+    "api_call_count": 185
+  }
+}
