@@ -148,3 +148,4 @@ Project decisions — including the deliberate `mcp` version pin and the single-
 are recorded in [DECISIONS.md](DECISIONS.md).
 
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_shield&issueType=license)
+
