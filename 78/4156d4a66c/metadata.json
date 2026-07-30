@@ -1,0 +1,30 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "784156d4a66c",
+  "strategy": "manual-commit",
+  "branch": "licensing-and-decisions",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "src/fossa_mcp/query.py",
+    "src/fossa_mcp/tools/issues.py",
+    "src/fossa_mcp/tools/posture.py",
+    "tests/test_posture.py",
+    "tests/test_query.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/78/4156d4a66c/0/metadata.json",
+      "transcript": "/78/4156d4a66c/0/full.jsonl",
+      "compact_transcript": "/78/4156d4a66c/0/transcript.jsonl",
+      "content_hash": "/78/4156d4a66c/0/content_hash.txt",
+      "prompt": "/78/4156d4a66c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 404,
+    "cache_creation_tokens": 328763,
+    "cache_read_tokens": 46030469,
+    "output_tokens": 167014,
+    "api_call_count": 216
+  }
+}
