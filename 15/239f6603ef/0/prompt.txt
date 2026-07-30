@@ -1,0 +1,9 @@
+I'm noticing that this local repo is on the licensing and decisions branch. Is there anything preventing us from switching it back to main?
+
+---
+
+Check the status between the local git copy and origin. Is there anything holding us back from switching back to main and killing this branch?
+
+---
+
+The README.md file has a section about iCloud Drive. Remove it. It applies to almost nobody.
