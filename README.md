@@ -47,22 +47,6 @@ Then edit `.env` and add your FOSSA API token:
 FOSSA_API_TOKEN=<your-full-api-token>
 ```
 
-### If the checkout lives in iCloud Drive
-
-iCloud Drive sets the macOS `hidden` file flag on files it syncs, and CPython 3.13+
-[skips hidden `.pth` files](https://docs.python.org/3/library/site.html) when building `sys.path`. If
-`.venv` is inside an iCloud-synced folder, the editable install's `.pth` file is ignored and every
-entry point fails with `ModuleNotFoundError: No module named 'fossa_mcp'`. Keep the environment
-outside iCloud:
-
-```bash
-export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/fossa-mcp"
-uv sync
-```
-
-`chflags nohidden .venv/lib/python*/site-packages/*.pth` also works, but only until the next sync
-recreates the file.
-
 ## Validate
 
 ```bash
