@@ -1,0 +1,50 @@
+FOSSA MCP Server
+Copyright 2026 Rick Ashford
+
+This product includes software developed by Rick Ashford.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+-------------------------------------------------------------------------------
+TRADEMARK NOTICE
+
+This is an UNOFFICIAL, community-built tool. It is not affiliated with,
+endorsed by, sponsored by, or supported by FOSSA, Inc.
+
+"FOSSA" is a trademark of FOSSA, Inc. It is used here solely in a nominative
+sense to identify the third-party API this software interoperates with. No
+trademark rights are claimed, and no endorsement is implied. See section 6 of
+the Apache License, Version 2.0.
+
+For the official FOSSA product and support, see https://fossa.com.
+
+-------------------------------------------------------------------------------
+THIRD-PARTY SOFTWARE
+
+This software depends on third-party open source packages, and distributed
+container images redistribute them in binary form. All runtime dependencies are
+under permissive licenses (MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC,
+MIT-0, PSF-2.0), with one exception:
+
+  certifi  --  Mozilla Public License 2.0 (MPL-2.0)
+
+MPL-2.0 is a file-level copyleft license. certifi is redistributed unmodified;
+its source is available at https://github.com/certifi/python-certifi and a copy
+of the MPL-2.0 accompanies it.
+
+Container images built from this repository ship a consolidated third-party
+license file. See the container documentation for its path.
+
+Container images are based on SUSE Base Container Images (BCI), which are
+governed by SUSE's own license terms, separate from and independent of the
+Apache License applied to this software.

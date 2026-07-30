@@ -1,30 +1,40 @@
-"""Dependency-related tools for FOSSA MCP server."""
+"""Dependency-related tools for the FOSSA MCP server."""
 
-import asyncio
-from typing import List, Optional, Any
-from mcp.server import ToolContext
+from typing import Any
+from urllib.parse import quote
+
+from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
-from ..models import DependencyListInput, ToolResponse
+from ..config import Settings
+from ..models import (
+    Confidence,
+    DependencyDepth,
+    DependencyListInput,
+    DependencySource,
+    DependencyStatus,
+    HasIssues,
+    LayerDepth,
+)
 from ..query import add_repeated, bool_to_str
 
 
 async def list_dependencies(
-    context: ToolContext,
+    ctx: Context,
     revision_locator: str,
-    dependency_locators: Optional[List[str]] = None,
-    title: Optional[str] = None,
-    statuses: Optional[List[str]] = None,
-    depths: Optional[List[str]] = None,
-    layer_depths: Optional[List[str]] = None,
-    has_issues: Optional[List[str]] = None,
-    licenses: Optional[List[str]] = None,
-    fetchers: Optional[List[str]] = None,
+    dependency_locators: list[str] | None = None,
+    title: str | None = None,
+    statuses: list[DependencyStatus] | None = None,
+    depths: list[DependencyDepth] | None = None,
+    layer_depths: list[LayerDepth] | None = None,
+    has_issues: list[HasIssues] | None = None,
+    licenses: list[str] | None = None,
+    fetchers: list[str] | None = None,
     show_ignored: bool = False,
-    confidence: Optional[List[str]] = None,
-    sources: Optional[List[str]] = None,
-    package_labels: Optional[List[str]] = None,
-    vendored_path: Optional[str] = None,
+    confidence: list[Confidence] | None = None,
+    sources: list[DependencySource] | None = None,
+    package_labels: list[str] | None = None,
+    vendored_path: str | None = None,
     include_resolution_notes: bool = False,
     include_license_text: bool = False,
     include_copyright: bool = False,
@@ -32,94 +42,87 @@ async def list_dependencies(
     include_download_url: bool = False,
     page: int = 1,
     count: int = 20,
-) -> ToolResponse:
+) -> dict[str, Any]:
     """
-    List dependencies detected in a specific project revision, with filters useful for licensing/security investigation.
-
-    Args:
-        context: MCP tool context
-        revision_locator: The revision locator to get dependencies for
-        dependency_locators: Filter by specific dependency locators
-        title: Filter by dependency title
-        statuses: Filter by dependency status
-        depths: Filter by depth (direct, transitive)
-        layer_depths: Filter by layer depth
-        has_issues: Filter by issue presence
-        licenses: Filter by license
-        fetchers: Filter by fetcher
-        show_ignored: Show ignored dependencies
-        confidence: Filter by confidence level
-        sources: Filter by source type
-        package_labels: Filter by package labels
-        vendored_path: Filter by vendored path
-        include_resolution_notes: Include resolution notes
-        include_license_text: Include license text
-        include_copyright: Include copyright information
-        include_matches: Include matches
-        include_download_url: Include download URL
-        page: Page number for pagination
-        count: Number of results per page
-
-    Returns:
-        Tool response with dependencies
+    List dependencies detected in a specific project revision, with filters
+    useful for licensing/security investigation.
     """
-    # Validate inputs
-    if page < 1:
-        raise ValueError("Page must be >= 1")
-    if not (1 <= count <= context.settings.fossa_max_page_size):
-        raise ValueError(f"Count must be between 1 and {context.settings.fossa_max_page_size}")
+    lifespan_ctx = ctx.request_context.lifespan_context
+    client: FossaClient = lifespan_ctx["client"]
+    settings: Settings = lifespan_ctx["settings"]
 
-    # Build query parameters
-    params: List[tuple[str, str]] = []
-
-    # Add repeated parameters
-    add_repeated(params, "locators", dependency_locators)
-    add_repeated(params, "status", statuses)
-    add_repeated(params, "depth", depths)
-    add_repeated(params, "layerDepth", layer_depths)
-    add_repeated(params, "hasIssues", has_issues)
-    add_repeated(params, "licenses", licenses)
-    add_repeated(params, "fetchers", fetchers)
-    add_repeated(params, "confidence", confidence)
-    add_repeated(params, "sources", sources)
-    add_repeated(params, "packageLabels", package_labels)
-
-    # Add simple parameters
-    if title is not None:
-        params.append(("title", title))
-
-    if show_ignored:
-        params.append(("showIgnored", bool_to_str(show_ignored)))
-
-    if vendored_path is not None:
-        params.append(("vendoredPath", vendored_path))
-
-    # Add boolean parameters (default to false for expensive fields)
-    params.append(("includeResolutionNotes", bool_to_str(include_resolution_notes)))
-    params.append(("includeLicenseText", bool_to_str(include_license_text)))
-    params.append(("includeCopyright", bool_to_str(include_copyright)))
-    params.append(("includeMatches", bool_to_str(include_matches)))
-    params.append(("includeDownloadUrl", bool_to_str(include_download_url)))
-
-    # Add pagination
-    params.append(("page", str(page)))
-    params.append(("count", str(count)))
-
-    # Encode the locator in the path (exactly once)
-    encoded_locator = revision_locator  # This will be URL-encoded by the client
-
-    # Make the API call
-    client: FossaClient = context.state["client"]
-    result = await client.request_json("GET", f"/v2/revisions/{encoded_locator}/dependencies", params=params)
-
-    return ToolResponse(
-        endpoint="GET /v2/revisions/{locator}/dependencies",
-        data=result
+    validated = DependencyListInput(
+        revision_locator=revision_locator,
+        dependency_locators=dependency_locators,
+        title=title,
+        statuses=statuses,
+        depths=depths,
+        layer_depths=layer_depths,
+        has_issues=has_issues,
+        licenses=licenses,
+        fetchers=fetchers,
+        show_ignored=show_ignored,
+        confidence=confidence,
+        sources=sources,
+        package_labels=package_labels,
+        vendored_path=vendored_path,
+        include_resolution_notes=include_resolution_notes,
+        include_license_text=include_license_text,
+        include_copyright=include_copyright,
+        include_matches=include_matches,
+        include_download_url=include_download_url,
+        page=page,
+        count=count,
     )
+    if not (1 <= validated.count <= settings.fossa_max_page_size):
+        raise ValueError(f"Count must be between 1 and {settings.fossa_max_page_size}")
+
+    params: list[tuple[str, str]] = []
+
+    add_repeated(params, "locators", validated.dependency_locators)
+    add_repeated(params, "status", validated.statuses)
+    add_repeated(params, "depth", validated.depths)
+    add_repeated(params, "layerDepth", validated.layer_depths)
+    add_repeated(params, "hasIssues", validated.has_issues)
+    add_repeated(params, "licenses", validated.licenses)
+    add_repeated(params, "fetchers", validated.fetchers)
+    add_repeated(params, "confidence", validated.confidence)
+    add_repeated(params, "sources", validated.sources)
+    add_repeated(params, "packageLabels", validated.package_labels)
+
+    if validated.title is not None:
+        params.append(("title", validated.title))
+
+    if validated.show_ignored:
+        params.append(("showIgnored", bool_to_str(validated.show_ignored)))
+
+    if validated.vendored_path is not None:
+        params.append(("vendoredPath", validated.vendored_path))
+
+    params.append(("includeResolutionNotes", bool_to_str(validated.include_resolution_notes)))
+    params.append(("includeLicenseText", bool_to_str(validated.include_license_text)))
+    params.append(("includeCopyright", bool_to_str(validated.include_copyright)))
+    params.append(("includeMatches", bool_to_str(validated.include_matches)))
+    params.append(("includeDownloadUrl", bool_to_str(validated.include_download_url)))
+
+    params.append(("page", str(validated.page)))
+    params.append(("count", str(validated.count)))
+
+    encoded_locator = quote(validated.revision_locator, safe="")
+
+    result = await client.request_json(
+        "GET", f"/v2/revisions/{encoded_locator}/dependencies", params=params
+    )
+
+    return {
+        "ok": True,
+        "endpoint": "GET /v2/revisions/{locator}/dependencies",
+        "data": result,
+    }
 
 
 async def get_dependency(
-    context: ToolContext,
+    ctx: Context,
     revision_locator: str,
     dependency_revision_locator: str,
     include_resolution_notes: bool = True,
@@ -127,54 +130,40 @@ async def get_dependency(
     include_copyright: bool = False,
     include_matches: bool = False,
     include_download_url: bool = False,
-) -> ToolResponse:
+) -> dict[str, Any]:
     """
     Get the richer detail record for one dependency in one revision.
 
-    Use the exact dependency revision locator returned by `fossa_list_dependencies`.
-
-    Args:
-        context: MCP tool context
-        revision_locator: The revision locator containing the dependency
-        dependency_revision_locator: The specific dependency locator
-        include_resolution_notes: Include resolution notes
-        include_license_text: Include license text
-        include_copyright: Include copyright information
-        include_matches: Include matches
-        include_download_url: Include download URL
-
-    Returns:
-        Tool response with dependency details
+    Use the exact dependency revision locator returned by
+    `fossa_list_dependencies`.
     """
-    # Validate inputs
     if not revision_locator:
         raise ValueError("Revision locator must not be blank")
     if not dependency_revision_locator:
         raise ValueError("Dependency revision locator must not be blank")
 
-    # Build query parameters
-    params: List[tuple[str, str]] = []
+    lifespan_ctx = ctx.request_context.lifespan_context
+    client: FossaClient = lifespan_ctx["client"]
 
-    # Add boolean parameters (default to false for expensive fields)
-    params.append(("includeResolutionNotes", bool_to_str(include_resolution_notes)))
-    params.append(("includeLicenseText", bool_to_str(include_license_text)))
-    params.append(("includeCopyright", bool_to_str(include_copyright)))
-    params.append(("includeMatches", bool_to_str(include_matches)))
-    params.append(("includeDownloadUrl", bool_to_str(include_download_url)))
+    params: list[tuple[str, str]] = [
+        ("includeResolutionNotes", bool_to_str(include_resolution_notes)),
+        ("includeLicenseText", bool_to_str(include_license_text)),
+        ("includeCopyright", bool_to_str(include_copyright)),
+        ("includeMatches", bool_to_str(include_matches)),
+        ("includeDownloadUrl", bool_to_str(include_download_url)),
+    ]
 
-    # Encode locators in the path (exactly once)
-    encoded_revision_locator = revision_locator  # This will be URL-encoded by the client
-    encoded_dependency_locator = dependency_revision_locator  # This will be URL-encoded by the client
+    encoded_revision_locator = quote(revision_locator, safe="")
+    encoded_dependency_locator = quote(dependency_revision_locator, safe="")
 
-    # Make the API call
-    client: FossaClient = context.state["client"]
     result = await client.request_json(
         "GET",
         f"/v2/revisions/{encoded_revision_locator}/dependencies/{encoded_dependency_locator}",
-        params=params
+        params=params,
     )
 
-    return ToolResponse(
-        endpoint="GET /v2/revisions/{locator}/dependencies/{dependencyRevisionLocator}",
-        data=result
-    )
+    return {
+        "ok": True,
+        "endpoint": "GET /v2/revisions/{locator}/dependencies/{dependencyRevisionLocator}",
+        "data": result,
+    }

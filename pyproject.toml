@@ -1,21 +1,21 @@
 [project]
 name = "fossa-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Model Context Protocol server for FOSSA API"
 authors = [
-    {name = "FOSSA MCP Implementation", email = "support@fossa.com"}
+    {name = "Rick Ashford", email = "rick@theashfords.org"}
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 readme = "README.md"
-license = {text = "MIT"}
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
 
 dependencies = [
-    "mcp[cli]>=2,<3",
+    "mcp[cli]>=1.28.1,<1.29",
     "httpx>=0.28,<1",
     "pydantic>=2.11,<3",
     "pydantic-settings>=2.10,<3",
@@ -34,5 +34,32 @@ dev = [
 ]
 
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+# Never reformat embedded code fences in Markdown — FOSSA_MCP_IMPLEMENTATION_SCOPE.md
+# is a frozen requirements document, not code this project owns.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.13"
+typeCheckingMode = "basic"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# Live tests are opt-in: `uv run pytest` must never touch the network, even on a
+# machine that happens to export FOSSA_API_TOKEN. Run them with
+# `uv run pytest -m live`.
+addopts = "-m 'not live'"
+markers = [
+    "live: requires a real FOSSA_API_TOKEN and network access",
+]

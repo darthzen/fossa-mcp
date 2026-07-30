@@ -1,87 +1,125 @@
 """FOSSA MCP server implementation."""
 
-import asyncio
 import logging
-from typing import List, Optional
-from mcp.server import MCPServer
-from mcp.server.stdio import stdio_server
-from mcp.server.http import http_server
+import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Any
 
-from .config import Settings
+from mcp.server.fastmcp import FastMCP
+from mcp.types import ToolAnnotations
+from starlette.requests import Request
+from starlette.responses import PlainTextResponse
+
+from . import __version__
 from .client import FossaClient
-from .tools import projects, revisions, dependencies, issues, posture, reports
+from .config import Settings
+from .tools import dependencies, issues, posture, projects, reports, revisions
 
 logger = logging.getLogger(__name__)
 
-# Create the MCP server instance
-mcp = MCPServer(
+settings = Settings()
+
+
+@asynccontextmanager
+async def lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
+    """Own the single FOSSA HTTP client for the life of the server process."""
+    client = FossaClient(settings)
+    try:
+        yield {"client": client, "settings": settings}
+    finally:
+        await client.aclose()
+
+
+mcp = FastMCP(
     "FOSSA",
-    version="0.1.0",
     instructions=(
         "Read-only access to FOSSA projects, revisions, dependencies, "
         "licensing issues, vulnerability issues, quality issues, and "
         "attribution reports. No tool mutates FOSSA state."
     ),
+    lifespan=lifespan,
+    host=settings.fossa_http_host,
+    port=settings.fossa_http_port,
 )
 
-# Register the tools
-mcp.tool("fossa_list_projects", projects.list_projects, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_get_project", projects.get_project, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_list_project_revisions", revisions.list_project_revisions, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_list_dependencies", dependencies.list_dependencies, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_get_dependency", dependencies.get_dependency, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_list_issues", issues.list_issues, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_get_issue", issues.get_issue, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_project_posture", posture.project_posture, annotations={"read_only_hint": True, "open_world_hint": True})
-mcp.tool("fossa_get_attribution_report", reports.get_attribution_report, annotations={"read_only_hint": True, "open_world_hint": True})
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request: Request) -> PlainTextResponse:
+    """Liveness endpoint for the streamable-http transport."""
+    return PlainTextResponse("ok")
 
 
-async def main(args: List[str]) -> None:
-    """Main entry point for the FOSSA MCP server."""
+_READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
-    # Parse command line arguments
+mcp.tool(name="fossa_list_projects", annotations=_READ_ONLY)(projects.list_projects)
+mcp.tool(name="fossa_get_project", annotations=_READ_ONLY)(projects.get_project)
+mcp.tool(name="fossa_list_project_revisions", annotations=_READ_ONLY)(
+    revisions.list_project_revisions
+)
+mcp.tool(name="fossa_list_dependencies", annotations=_READ_ONLY)(dependencies.list_dependencies)
+mcp.tool(name="fossa_get_dependency", annotations=_READ_ONLY)(dependencies.get_dependency)
+mcp.tool(name="fossa_list_issues", annotations=_READ_ONLY)(issues.list_issues)
+mcp.tool(name="fossa_get_issue", annotations=_READ_ONLY)(issues.get_issue)
+mcp.tool(name="fossa_project_posture", annotations=_READ_ONLY)(posture.project_posture)
+mcp.tool(name="fossa_get_attribution_report", annotations=_READ_ONLY)(
+    reports.get_attribution_report
+)
+
+
+def _forbid_unexpected_tool_arguments(server: FastMCP) -> None:
+    """Make tools reject unknown arguments instead of silently dropping them.
+
+    FastMCP 1.28 generates each tool's argument model with Pydantic's default
+    `extra="ignore"`, so a client that passes a misspelled or invented argument
+    gets a successful call with that argument discarded — an easy way for a
+    model to believe it applied a filter that never reached FOSSA. Tighten every
+    generated model and republish its JSON schema so `additionalProperties:
+    false` is advertised too.
+
+    This reaches into the tool manager because 1.28 exposes no public hook. Fold
+    it into tool registration when moving to the 2.x SDK (see DECISIONS.md).
+    """
+    for tool in server._tool_manager._tools.values():
+        arg_model = tool.fn_metadata.arg_model
+        arg_model.model_config["extra"] = "forbid"
+        arg_model.model_rebuild(force=True)
+        tool.parameters = arg_model.model_json_schema(by_alias=True)
+
+
+_forbid_unexpected_tool_arguments(mcp)
+
+_ALLOWED_TRANSPORTS = ("stdio", "streamable-http")
+
+
+def main(argv: list[str] | None = None) -> None:
+    """CLI entry point for the FOSSA MCP server."""
+    args = sys.argv[1:] if argv is None else argv
     transport = "stdio"
-    if len(args) > 0:
-        if args[0] == "--transport":
-            if len(args) > 1:
-                transport = args[1]
-            else:
+
+    idx = 0
+    while idx < len(args):
+        arg = args[idx]
+        if arg == "--transport":
+            if idx + 1 >= len(args):
                 raise ValueError("Missing transport value after --transport")
-        elif args[0] == "--version":
-            print("fossa-mcp version 0.1.0")
+            transport = args[idx + 1]
+            if transport not in _ALLOWED_TRANSPORTS:
+                raise ValueError(f"Unknown transport: {transport}")
+            idx += 2
+        elif arg == "--version":
+            print(f"fossa-mcp version {__version__}")
             return
         else:
-            # Unknown argument
-            raise ValueError(f"Unknown argument: {args[0]}")
+            raise ValueError(f"Unknown argument: {arg}")
 
-    # Setup logging
-    settings = Settings()
     logging.basicConfig(
-        level=getattr(logging, settings.fossa_log_level),
+        level=settings.log_level_int,
         format="%(asctime)s %(name)s %(levelname)s %(message)s",
-        handlers=[
-            logging.StreamHandler()  # This will go to stderr by default
-        ]
+        stream=sys.stderr,
     )
 
-    logger.info(f"Starting FOSSA MCP server with transport: {transport}")
+    logger.info("Starting FOSSA MCP server with transport: %s", transport)
 
-    # Create the FOSSA client
-    client = FossaClient(settings)
-
-    # Register the lifespan for the client
-    @mcp.lifespan
-    async def lifespan():
-        """Lifespan context manager for the MCP server."""
-        try:
-            yield {"client": client}
-        finally:
-            await client.aclose()
-
-    # Start the appropriate transport
-    if transport == "stdio":
-        await stdio_server(mcp)
-    elif transport == "streamable-http":
-        await http_server(mcp, host=settings.fossa_http_host, port=settings.fossa_http_port)
-    else:
-        raise ValueError(f"Unknown transport: {transport}")
+    # mcp.run() is synchronous: it drives its own anyio event loop.
+    mcp.run(transport=transport)
