@@ -1,0 +1,5 @@
+How do I get the little FOSSA badge to show up at the bottom of my repo page in github?
+
+---
+
+Add it to the bottom of README.md, then commit and push. [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=shield&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_shield&issueType=license)
