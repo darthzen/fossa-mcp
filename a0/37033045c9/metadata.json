@@ -1,0 +1,51 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "a037033045c9",
+  "strategy": "manual-commit",
+  "branch": "main",
+  "checkpoints_count": 6,
+  "files_touched": [
+    ".env.example",
+    ".gitignore",
+    "IMPLEMENTATION_SUMMARY.md",
+    "README.md",
+    "pyproject.toml",
+    "scripts/update_openapi.py",
+    "spec/README.md",
+    "src/fossa_mcp/__init__.py",
+    "src/fossa_mcp/__main__.py",
+    "src/fossa_mcp/client.py",
+    "src/fossa_mcp/config.py",
+    "src/fossa_mcp/errors.py",
+    "src/fossa_mcp/models.py",
+    "src/fossa_mcp/query.py",
+    "src/fossa_mcp/server.py",
+    "src/fossa_mcp/tools/__init__.py",
+    "src/fossa_mcp/tools/dependencies.py",
+    "src/fossa_mcp/tools/issues.py",
+    "src/fossa_mcp/tools/posture.py",
+    "src/fossa_mcp/tools/projects.py",
+    "src/fossa_mcp/tools/reports.py",
+    "src/fossa_mcp/tools/revisions.py",
+    "tests/conftest.py",
+    "tests/test_client.py",
+    "tests/test_mcp_integration.py",
+    "tests/test_query.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/a0/37033045c9/0/metadata.json",
+      "transcript": "/a0/37033045c9/0/full.jsonl",
+      "compact_transcript": "/a0/37033045c9/0/transcript.jsonl",
+      "content_hash": "/a0/37033045c9/0/content_hash.txt",
+      "prompt": "/a0/37033045c9/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3469645,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 0,
+    "output_tokens": 6392,
+    "api_call_count": 47
+  }
+}
