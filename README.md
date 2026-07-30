@@ -2,11 +2,28 @@
 
 A Model Context Protocol server for the FOSSA API that allows AI assistants to inspect FOSSA organizations and answer practical software composition analysis questions.
 
-This version is read-only and does not modify FOSSA state.
+> **Unofficial project.** Not affiliated with, endorsed by, or supported by FOSSA, Inc. "FOSSA" is a
+> trademark of FOSSA, Inc., used here only to identify the API this software interoperates with. For
+> the official product and support, see [fossa.com](https://fossa.com).
 
 ## Safety Statement
 
 This version is read-only and does not modify FOSSA state.
+
+## Deployment model — single-tenant
+
+**This server is designed to be run by one operator with one FOSSA API token.** You run your own
+instance; there is no multi-user mode.
+
+⚠️ **The server executes every request using the single `FOSSA_API_TOKEN` it was started with.** It
+does not authenticate callers or scope requests per user. If you expose the HTTP transport to other
+people, every one of them gets the full access of that token — including anything it can read across
+your FOSSA organization.
+
+- `stdio` is the default transport and the intended deployment shape: your MCP client launches the
+  process, and the token stays local to it.
+- `streamable-http` binds `127.0.0.1` by default and is intended for local or sidecar use. Do not
+  put it on a shared network interface without an authenticating proxy in front of it.
 
 ## Requirements
 
@@ -92,3 +109,17 @@ Give me the FOSSA risk posture for project <PROJECT_LOCATOR> at revision <REVISI
 ```text
 Generate the Markdown attribution report for revision <REVISION_LOCATOR>.
 ```
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution,
+the trademark disclaimer, and third-party license information.
+
+All runtime dependencies are under permissive licenses (MIT, BSD, Apache-2.0, ISC, PSF) with the
+exception of `certifi`, which is MPL-2.0 and is redistributed unmodified.
+
+Container images are built on SUSE Base Container Images, which carry SUSE's own license terms
+separate from this project's.
+
+Project decisions — including the deliberate `mcp` version pin and the single-tenant constraint —
+are recorded in [DECISIONS.md](DECISIONS.md).

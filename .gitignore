@@ -9,3 +9,5 @@ dist/
 build/
 .DS_Store
 .claude/
+# Transient work orders (see DECISIONS.md for durable decisions)
+HANDOFF_*.md
