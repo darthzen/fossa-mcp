@@ -1,0 +1,25 @@
+Check sonnet's work on the implementation of the spec.
+
+---
+
+Yes
+
+---
+
+The token is in ~/Developer/keys/fossa/token.txt You use your best judgement on the best way to implement this. We are going to run this in our sdf1 k3s cluster, so a kubernetes secret and a deployment file in the lab-fleet directory to deploy via fleet make the most sense to me.
+
+---
+
+Where in lab-fleet did you put it?
+
+---
+
+Is the image built and pushed to harbor?
+
+---
+
+Token is updated
+
+---
+
+Last thing. I added the dns entry for fossa-mcp.ash4d.com to cloudflare, pointing to the traefik ingress. Let's set that up, and then give me the command to add fossa-mcp to your mcp server list.
