@@ -1,4 +1,6 @@
 # FOSSA MCP Server
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_shield)
+
 
 A Model Context Protocol server for the FOSSA API that allows AI assistants to inspect FOSSA organizations and answer practical software composition analysis questions.
 
@@ -92,3 +94,6 @@ Give me the FOSSA risk posture for project <PROJECT_LOCATOR> at revision <REVISI
 ```text
 Generate the Markdown attribution report for revision <REVISION_LOCATOR>.
 ```
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_large)
