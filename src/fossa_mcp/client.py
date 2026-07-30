@@ -1,23 +1,32 @@
 """FOSSA API client for the MCP server."""
 
 import asyncio
-import httpx
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import quote
+from typing import Any
 
+import httpx
+
+from . import __version__
 from .config import Settings
 from .errors import FossaApiError
-from .query import bool_to_str
 
 logger = logging.getLogger(__name__)
 
+_RETRYABLE_STATUS_CODES = {502, 503, 504}
+_MAX_RETRIES = 2
+_BACKOFF_SECONDS = (0.25, 0.75)
+_MAX_RETRY_AFTER_SECONDS = 10.0
+
 
 class FossaClient:
-    """Asynchronous FOSSA API client."""
+    """Asynchronous FOSSA API client.
 
-    def __init__(self, settings: Settings, transport: Optional[httpx.AsyncBaseTransport] = None):
+    Owns a single reusable `httpx.AsyncClient` and connection pool for the
+    lifetime of the server process.
+    """
+
+    def __init__(self, settings: Settings, transport: httpx.AsyncBaseTransport | None = None):
         """
         Initialize the FOSSA client.
 
@@ -27,203 +36,196 @@ class FossaClient:
         """
         self.settings = settings
 
-        # Create async HTTP client with configured timeout and transport
+        headers = {
+            "User-Agent": f"fossa-mcp/{__version__}",
+            "Accept": "application/json",
+        }
+        if settings.fossa_api_token:
+            headers["Authorization"] = f"Bearer {settings.fossa_api_token}"
+
         self._client = httpx.AsyncClient(
-            base_url=settings.api_base_url,
+            base_url=settings.base_url,
             timeout=settings.fossa_timeout_seconds,
             verify=settings.fossa_verify_tls,
             transport=transport,
-            headers={
-                "User-Agent": f"fossa-mcp/{__import__('fossa_mcp').__version__ or '0.1.0'}",
-                "Accept": "application/json",
-            }
+            headers=headers,
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
-
-        # Add authorization header if token is provided
-        if settings.fossa_api_token:
-            self._client.headers["Authorization"] = f"Bearer {settings.fossa_api_token}"
 
     async def request_json(
         self,
         method: str,
         path: str,
         *,
-        params: Optional[List[Tuple[str, str]]] = None,
-    ) -> Union[Dict[str, Any], List[Any]]:
+        params: list[tuple[str, str]] | None = None,
+    ) -> dict[str, Any] | list[Any]:
         """
-        Make an HTTP request and return JSON response.
-
-        Args:
-            method: HTTP method
-            path: API endpoint path
-            params: Query parameters
-
-        Returns:
-            Parsed JSON response
+        Make an HTTP request and return the parsed JSON response.
 
         Raises:
-            FossaApiError: If the API returns an error
+            FossaApiError: If the API returns an error or an invalid JSON body.
         """
-        # Build full URL with query parameters
-        url = path
+        _, body = await self.request_json_with_status(method, path, params=params)
+        return body
 
-        # Add query parameters if provided
-        if params:
-            query_string = "&".join([f"{k}={v}" for k, v in params])
-            if query_string:
-                url += f"?{query_string}"
+    async def request_json_with_status(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: list[tuple[str, str]] | None = None,
+    ) -> tuple[int, dict[str, Any] | list[Any]]:
+        """
+        Make an HTTP request and return `(status_code, parsed_json)`.
 
-        logger.info(f"FOSSA {method} {url}")
+        Useful for endpoints where a specific 2xx status code (e.g. FOSSA's
+        `202` "analysis in progress") is distinct from ordinary success and
+        must not be discarded.
 
-        try:
-            response = await self._client.request(method, url)
+        Raises:
+            FossaApiError: If the API returns an error or an invalid JSON body.
+        """
+        response = await self._request(method, path, params=params)
 
-            # Log the request details
-            logger.info(
-                f"FOSSA {method} {url} -> {response.status_code} in {response.elapsed.total_seconds() * 1000:.0f}ms"
-            )
+        if 200 <= response.status_code < 300:
+            try:
+                return response.status_code, response.json()
+            except json.JSONDecodeError as exc:
+                raise FossaApiError(
+                    status_code=response.status_code,
+                    message="Invalid JSON response from FOSSA API",
+                    method=method,
+                    path=path,
+                ) from exc
 
-            # Handle different response status codes
-            if 200 <= response.status_code < 300:
-                # Success - parse JSON
-                try:
-                    return response.json()
-                except json.JSONDecodeError:
-                    raise FossaApiError(
-                        status_code=response.status_code,
-                        message="Invalid JSON response from FOSSA API",
-                        method=method,
-                        path=path
-                    )
-            else:
-                # Error - attempt to parse FOSSA error format
-                try:
-                    error_data = response.json()
-                    # Extract FOSSA-specific error fields
-                    error_name = error_data.get("name")
-                    fossa_code = error_data.get("code")
-                    reference_uuid = error_data.get("uuid")
-
-                    raise FossaApiError(
-                        status_code=response.status_code,
-                        message=error_data.get("message", "Unknown error"),
-                        error_name=error_name,
-                        fossa_code=fossa_code,
-                        reference_uuid=reference_uuid,
-                        method=method,
-                        path=path
-                    )
-                except json.JSONDecodeError:
-                    # If we can't parse the JSON, raise a generic error
-                    raise FossaApiError(
-                        status_code=response.status_code,
-                        message=response.text or "Unknown error",
-                        method=method,
-                        path=path
-                    )
-
-        except httpx.TimeoutException:
-            raise FossaApiError(
-                status_code=0,
-                message=f"FOSSA request timed out after {self.settings.fossa_timeout_seconds} seconds while calling {method} {path}.",
-                method=method,
-                path=path
-            )
-        except httpx.RequestError as e:
-            # Handle connection errors
-            raise FossaApiError(
-                status_code=0,
-                message=f"FOSSA request failed: {str(e)}",
-                method=method,
-                path=path
-            )
+        raise self._build_error(response, method, path)
 
     async def request_text(
         self,
         method: str,
         path: str,
         *,
-        params: Optional[List[Tuple[str, str]]] = None,
-    ) -> Tuple[str, Optional[str]]:
+        params: list[tuple[str, str]] | None = None,
+    ) -> tuple[str, str | None]:
         """
-        Make an HTTP request and return text response.
-
-        Args:
-            method: HTTP method
-            path: API endpoint path
-            params: Query parameters
-
-        Returns:
-            Tuple of (text_content, content_type)
+        Make an HTTP request and return the raw text response.
 
         Raises:
-            FossaApiError: If the API returns an error
+            FossaApiError: If the API returns an error.
         """
-        # Build full URL with query parameters
-        url = path
+        response = await self._request(method, path, params=params)
 
-        # Add query parameters if provided
-        if params:
-            query_string = "&".join([f"{k}={v}" for k, v in params])
-            if query_string:
-                url += f"?{query_string}"
+        if 200 <= response.status_code < 300:
+            return response.text, response.headers.get("content-type")
 
-        logger.info(f"FOSSA {method} {url}")
+        raise self._build_error(response, method, path)
 
-        try:
-            response = await self._client.request(method, url)
+    async def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: list[tuple[str, str]] | None = None,
+    ) -> httpx.Response:
+        """Perform the HTTP call, retrying transient failures per the retry policy."""
+        # httpx's QueryParamTypes list branch is invariant on
+        # list[tuple[str, str]]; its homogeneous-tuple branch is covariant, so
+        # pass a plain tuple instead of relying on structural list compatibility.
+        httpx_params = tuple(params) if params else None
 
-            # Log the request details
+        attempt = 0
+        while True:
+            try:
+                response = await self._client.request(method, path, params=httpx_params)
+            except httpx.TimeoutException as exc:
+                if attempt < _MAX_RETRIES:
+                    await self._sleep_backoff(attempt)
+                    attempt += 1
+                    continue
+                raise FossaApiError(
+                    status_code=0,
+                    message=(
+                        f"FOSSA request timed out after {self.settings.fossa_timeout_seconds} "
+                        f"seconds while calling {method} {path}."
+                    ),
+                    method=method,
+                    path=path,
+                ) from exc
+            except httpx.TransportError as exc:
+                if attempt < _MAX_RETRIES:
+                    await self._sleep_backoff(attempt)
+                    attempt += 1
+                    continue
+                raise FossaApiError(
+                    status_code=0,
+                    message=f"FOSSA request failed while calling {method} {path}: {exc}",
+                    method=method,
+                    path=path,
+                ) from exc
+
             logger.info(
-                f"FOSSA {method} {url} -> {response.status_code} in {response.elapsed.total_seconds() * 1000:.0f}ms"
+                "FOSSA %s %s -> %d%s",
+                method,
+                path,
+                response.status_code,
+                self._elapsed_suffix(response),
             )
 
-            # Handle different response status codes
-            if 200 <= response.status_code < 300:
-                # Success - return content and content type
-                return response.text, response.headers.get("content-type")
-            else:
-                # Error - attempt to parse FOSSA error format
+            if response.status_code in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES:
+                await self._sleep_backoff(attempt, response)
+                attempt += 1
+                continue
+
+            return response
+
+    async def _sleep_backoff(self, attempt: int, response: httpx.Response | None = None) -> None:
+        """Sleep for the backoff delay, honoring a safe, short `Retry-After` if present."""
+        delay = _BACKOFF_SECONDS[attempt]
+
+        if response is not None:
+            retry_after = response.headers.get("retry-after")
+            if retry_after is not None:
                 try:
-                    error_data = response.json()
-                    # Extract FOSSA-specific error fields
-                    error_name = error_data.get("name")
-                    fossa_code = error_data.get("code")
-                    reference_uuid = error_data.get("uuid")
+                    seconds = float(retry_after)
+                except ValueError:
+                    seconds = None
+                if seconds is not None and 0 <= seconds <= _MAX_RETRY_AFTER_SECONDS:
+                    delay = seconds
 
-                    raise FossaApiError(
-                        status_code=response.status_code,
-                        message=error_data.get("message", "Unknown error"),
-                        error_name=error_name,
-                        fossa_code=fossa_code,
-                        reference_uuid=reference_uuid,
-                        method=method,
-                        path=path
-                    )
-                except json.JSONDecodeError:
-                    # If we can't parse the JSON, raise a generic error
-                    raise FossaApiError(
-                        status_code=response.status_code,
-                        message=response.text or "Unknown error",
-                        method=method,
-                        path=path
-                    )
+        logger.info("FOSSA retrying (attempt %d) after %.2fs", attempt + 1, delay)
+        await asyncio.sleep(delay)
 
-        except httpx.TimeoutException:
-            raise FossaApiError(
-                status_code=0,
-                message=f"FOSSA request timed out after {self.settings.fossa_timeout_seconds} seconds while calling {method} {path}.",
+    @staticmethod
+    def _elapsed_suffix(response: httpx.Response) -> str:
+        """Format elapsed time for logging; absent under mock transports."""
+        try:
+            elapsed_ms = response.elapsed.total_seconds() * 1000
+        except RuntimeError:
+            return ""
+        return f" in {elapsed_ms:.0f}ms"
+
+    @staticmethod
+    def _build_error(response: httpx.Response, method: str, path: str) -> FossaApiError:
+        """Build a FossaApiError from an error response, parsing FOSSA's JSON error shape."""
+        try:
+            error_data = response.json()
+        except json.JSONDecodeError:
+            return FossaApiError(
+                status_code=response.status_code,
+                message=response.text or "Unknown error",
                 method=method,
-                path=path
+                path=path,
             )
-        except httpx.RequestError as e:
-            # Handle connection errors
-            raise FossaApiError(
-                status_code=0,
-                message=f"FOSSA request failed: {str(e)}",
-                method=method,
-                path=path
-            )
+
+        return FossaApiError(
+            status_code=response.status_code,
+            message=error_data.get("message", "Unknown error"),
+            error_name=error_data.get("name"),
+            fossa_code=error_data.get("code"),
+            reference_uuid=error_data.get("uuid"),
+            method=method,
+            path=path,
+        )
 
     async def aclose(self) -> None:
         """Close the HTTP client."""

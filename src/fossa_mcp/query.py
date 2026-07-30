@@ -1,10 +1,10 @@
 """Query parameter helpers for FOSSA MCP server."""
 
-from typing import List, Sequence, Tuple
+from collections.abc import Sequence
 
 
 def add_repeated(
-    params: List[Tuple[str, str]],
+    params: list[tuple[str, str]],
     key: str,
     values: Sequence[str] | None,
 ) -> None:

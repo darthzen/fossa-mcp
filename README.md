@@ -27,7 +27,7 @@ your FOSSA organization.
 
 ## Requirements
 
-- Python 3.11+
+- Python 3.13+
 - `uv`
 - Full FOSSA API token for live calls
 - Node/npm only when launching MCP Inspector through `mcp dev`
@@ -73,6 +73,26 @@ uv run fossa-mcp
 ```bash
 uv run fossa-mcp --transport streamable-http
 ```
+
+## Container
+
+```bash
+docker run --rm -i -e FOSSA_API_TOKEN=<your-full-api-token> rashford/fossa-mcp:0.1
+```
+
+For `streamable-http`, publish the port and override the default `CMD`:
+
+```bash
+docker run --rm -p 8000:8000 -e FOSSA_API_TOKEN=<your-full-api-token> \
+  rashford/fossa-mcp:0.1 --transport streamable-http
+```
+
+Images are tagged `:0.1.0` and `:0.1`. `:latest` is intentionally not published until a release has
+soaked — see [DECISIONS.md](DECISIONS.md).
+
+Every image ships `LICENSE`, `NOTICE`, and a consolidated `/app/THIRD_PARTY_LICENSES.txt` covering
+every runtime dependency actually installed in that image, generated at build time by
+`scripts/generate_third_party_licenses.py`.
 
 ## Tools
 

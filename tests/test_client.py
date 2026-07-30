@@ -1,70 +1,230 @@
-"""Tests for FOSSA client."""
+"""Tests for the FOSSA HTTP client: auth, encoding, errors, and retries."""
 
+import httpx
 import pytest
-import sys
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
-
-# Add src directory to Python path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from fossa_mcp.client import FossaClient
-from fossa_mcp.config import Settings
+from fossa_mcp.errors import FossaApiError
 
 
 @pytest.mark.asyncio
-async def test_client_initialization():
-    """Test FOSSA client initialization."""
-    settings = Settings(fossa_api_token="test-token")
+async def test_authorization_header_sent(settings, respx_mock):
+    route = respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(200, json={"projects": []})
+    )
+    client = FossaClient(settings)
+    await client.request_json("GET", "/v2/projects")
+    await client.aclose()
 
-    # Mock transport to avoid real HTTP calls
-    mock_transport = MagicMock()
+    assert route.calls.last.request.headers["Authorization"] == "Bearer test-token"
+    assert route.calls.last.request.headers["Accept"] == "application/json"
+    assert "fossa-mcp/" in route.calls.last.request.headers["User-Agent"]
 
-    client = FossaClient(settings, transport=mock_transport)
 
-    assert client.settings == settings
+@pytest.mark.asyncio
+async def test_no_double_api_prefix(settings, respx_mock):
+    route = respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    client = FossaClient(settings)
+    await client.request_json("GET", "/v2/projects")
+    await client.aclose()
+
+    url = str(route.calls.last.request.url)
+    assert url == "https://app.fossa.com/api/v2/projects"
+    assert "/api/api" not in url
+
+
+@pytest.mark.parametrize(
+    "locator",
+    [
+        "git+github.com/acme/widget",
+        "git+github.com/acme/widget$abc123",
+        "npm+lodash$4.17.21",
+        "custom+1234/example",
+    ],
+)
+@pytest.mark.asyncio
+async def test_locator_path_encoding_no_double_encoding(settings, respx_mock, locator):
+    from urllib.parse import quote
+
+    encoded = quote(locator, safe="")
+    respx_mock.get(f"https://app.fossa.com/api/projects/{encoded}").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    client = FossaClient(settings)
+    await client.request_json("GET", f"/projects/{encoded}")
+    await client.aclose()
+
+    # No application-created double-encoding, e.g. "%2F" becoming "%252F".
+    assert "%25" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_query_values_are_not_preencoded(settings, respx_mock):
+    route = respx_mock.get("https://app.fossa.com/api/v2/issues").mock(
+        return_value=httpx.Response(200, json={"issues": []})
+    )
+    client = FossaClient(settings)
+    await client.request_json("GET", "/v2/issues", params=[("filter[search]", "log4j & shell x/y")])
+    await client.aclose()
+
+    request = route.calls.last.request
+    assert httpx.QueryParams(request.url.query.decode())["filter[search]"] == "log4j & shell x/y"
+
+
+@pytest.mark.asyncio
+async def test_repeated_query_params_round_trip(settings, respx_mock):
+    route = respx_mock.get("https://app.fossa.com/api/v2/issues").mock(
+        return_value=httpx.Response(200, json={"issues": []})
+    )
+    client = FossaClient(settings)
+    await client.request_json(
+        "GET",
+        "/v2/issues",
+        params=[("filter[severity][]", "critical"), ("filter[severity][]", "high")],
+    )
+    await client.aclose()
+
+    query = str(route.calls.last.request.url.query, "utf-8")
+    assert "filter%5Bseverity%5D%5B%5D=critical" in query
+    assert "filter%5Bseverity%5D%5B%5D=high" in query
+
+
+@pytest.mark.asyncio
+async def test_token_not_in_exception_text(settings, respx_mock):
+    respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(
+            401, json={"message": "Invalid token", "name": "UnauthorizedError"}
+        )
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json("GET", "/v2/projects")
+    await client.aclose()
+
+    assert "test-token" not in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [400, 403, 404, 500])
+async def test_error_status_codes_raise_with_fossa_error_shape(settings, respx_mock, status_code):
+    respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(
+            status_code,
+            json={
+                "uuid": "abc-123",
+                "code": 2004,
+                "message": "Something went wrong",
+                "name": "SomeError",
+                "httpStatusCode": status_code,
+            },
+        )
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json("GET", "/v2/projects")
+    await client.aclose()
+
+    err = excinfo.value
+    assert err.status_code == status_code
+    assert err.error_name == "SomeError"
+    assert err.fossa_code == 2004
+    assert err.reference_uuid == "abc-123"
+    assert "Something went wrong" in str(err)
+
+
+@pytest.mark.asyncio
+async def test_malformed_json_error_body(settings, respx_mock):
+    respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(500, text="<html>not json</html>")
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json("GET", "/v2/projects")
+    await client.aclose()
+
+    assert excinfo.value.status_code == 500
+
+
+@pytest.mark.asyncio
+async def test_timeout_error_message_is_safe(settings, respx_mock):
+    respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        side_effect=httpx.ReadTimeout("timed out")
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json("GET", "/v2/projects")
+    await client.aclose()
+
+    assert "timed out" in str(excinfo.value)
+    assert "test-token" not in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_connection_error(settings, respx_mock):
+    respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        side_effect=httpx.ConnectError("boom")
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError):
+        await client.request_json("GET", "/v2/projects")
     await client.aclose()
 
 
 @pytest.mark.asyncio
-async def test_client_request_json():
-    """Test FOSSA client JSON request."""
-    settings = Settings(fossa_api_token="test-token")
+async def test_issue_202_is_not_an_error(settings, respx_mock):
+    respx_mock.get("https://app.fossa.com/api/v2/issues").mock(
+        return_value=httpx.Response(202, json={"message": "analysis in progress"})
+    )
+    client = FossaClient(settings)
+    status_code, body = await client.request_json_with_status("GET", "/v2/issues")
+    await client.aclose()
 
-    # Mock HTTP response
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = {"test": "data"}
-    mock_response.elapsed.total_seconds.return_value = 0.1
-
-    with patch('httpx.AsyncClient.request', return_value=mock_response):
-        client = FossaClient(settings)
-
-        # Test successful request
-        result = await client.request_json("GET", "/test")
-        assert result == {"test": "data"}
-
-        await client.aclose()
+    assert status_code == 202
+    assert body == {"message": "analysis in progress"}
 
 
 @pytest.mark.asyncio
-async def test_client_request_text():
-    """Test FOSSA client text request."""
-    settings = Settings(fossa_api_token="test-token")
+async def test_retries_on_503_then_succeeds(settings, respx_mock):
+    route = respx_mock.get("https://app.fossa.com/api/v2/projects")
+    route.side_effect = [
+        httpx.Response(503),
+        httpx.Response(503),
+        httpx.Response(200, json={"ok": True}),
+    ]
+    client = FossaClient(settings)
+    result = await client.request_json("GET", "/v2/projects")
+    await client.aclose()
 
-    # Mock HTTP response
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.text = "test content"
-    mock_response.headers = {"content-type": "text/plain"}
-    mock_response.elapsed.total_seconds.return_value = 0.1
+    assert result == {"ok": True}
+    assert route.call_count == 3
 
-    with patch('httpx.AsyncClient.request', return_value=mock_response):
-        client = FossaClient(settings)
 
-        # Test successful request
-        result, content_type = await client.request_text("GET", "/test")
-        assert result == "test content"
-        assert content_type == "text/plain"
+@pytest.mark.asyncio
+async def test_gives_up_after_max_retries(settings, respx_mock):
+    route = respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(503)
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json("GET", "/v2/projects")
+    await client.aclose()
 
-        await client.aclose()
+    # initial attempt + 2 retries = 3 total
+    assert route.call_count == 3
+    assert excinfo.value.status_code == 503
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status_code", [400, 401, 403, 404, 409, 422])
+async def test_does_not_retry_non_retryable_status_codes(settings, respx_mock, status_code):
+    route = respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(status_code, json={"message": "no"})
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError):
+        await client.request_json("GET", "/v2/projects")
+    await client.aclose()
+
+    assert route.call_count == 1

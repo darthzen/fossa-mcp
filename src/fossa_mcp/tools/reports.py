@@ -1,18 +1,25 @@
-"""Report-related tools for FOSSA MCP server."""
+"""Report-related tools for the FOSSA MCP server."""
 
-import asyncio
 import json
-from typing import List, Optional, Any, Dict
-from mcp.server import ToolContext
+from typing import Any
+from urllib.parse import quote
+
+from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
-from ..models import AttributionReportInput, ToolResponse
+from ..config import Settings
+from ..models import AttributionReportInput, ReportFormat
+
+_ENDPOINT = "GET /v2/revisions/{locator}/attribution/download"
+
+_TEXT_FORMATS = ("MD", "TXT")
+_JSON_FORMATS = ("SPDX_JSON", "CYCLONEDX_JSON")
 
 
 async def get_attribution_report(
-    context: ToolContext,
+    ctx: Context,
     revision_locator: str,
-    format: str = "MD",
+    format: ReportFormat = "MD",
     include_deep_dependencies: bool = True,
     include_direct_dependencies: bool = True,
     include_license_list: bool = True,
@@ -26,155 +33,79 @@ async def get_attribution_report(
     include_license_headers: bool = False,
     include_package_labels: bool = False,
     include_hash_and_version_data: bool = False,
-) -> ToolResponse:
-    """
-    Retrieve a text-friendly FOSSA attribution/SBOM report for a revision.
+) -> dict[str, Any]:
+    """Retrieve a text-friendly FOSSA attribution/SBOM report for a revision."""
+    validated = AttributionReportInput(
+        revision_locator=revision_locator,
+        format=format,
+        include_deep_dependencies=include_deep_dependencies,
+        include_direct_dependencies=include_direct_dependencies,
+        include_license_list=include_license_list,
+        include_license_scan=include_license_scan,
+        include_project_license=include_project_license,
+        include_copyright_list=include_copyright_list,
+        include_file_matches=include_file_matches,
+        include_open_vulnerabilities=include_open_vulnerabilities,
+        include_closed_vulnerabilities=include_closed_vulnerabilities,
+        include_dependency_summary=include_dependency_summary,
+        include_license_headers=include_license_headers,
+        include_package_labels=include_package_labels,
+        include_hash_and_version_data=include_hash_and_version_data,
+    )
 
-    Args:
-        context: MCP tool context
-        revision_locator: The revision locator to get report for
-        format: Report format ("MD", "TXT", "SPDX_JSON", or "CYCLONEDX_JSON")
-        include_deep_dependencies: Include deep dependencies
-        include_direct_dependencies: Include direct dependencies
-        include_license_list: Include license list
-        include_license_scan: Include license scan
-        include_project_license: Include project license
-        include_copyright_list: Include copyright list
-        include_file_matches: Include file matches
-        include_open_vulnerabilities: Include open vulnerabilities
-        include_closed_vulnerabilities: Include closed vulnerabilities
-        include_dependency_summary: Include dependency summary
-        include_license_headers: Include license headers
-        include_package_labels: Include package labels
-        include_hash_and_version_data: Include hash and version data
+    lifespan_ctx = ctx.request_context.lifespan_context
+    client: FossaClient = lifespan_ctx["client"]
+    settings: Settings = lifespan_ctx["settings"]
 
-    Returns:
-        Tool response with attribution report
-    """
-    # Build query parameters
-    params: List[tuple[str, str]] = []
+    params: list[tuple[str, str]] = [
+        ("format", validated.format),
+        ("includeDeepDependencies", str(validated.include_deep_dependencies).lower()),
+        ("includeDirectDependencies", str(validated.include_direct_dependencies).lower()),
+        ("includeLicenseList", str(validated.include_license_list).lower()),
+        ("includeLicenseScan", str(validated.include_license_scan).lower()),
+        ("includeProjectLicense", str(validated.include_project_license).lower()),
+        ("includeCopyrightList", str(validated.include_copyright_list).lower()),
+        ("includeFileMatches", str(validated.include_file_matches).lower()),
+        ("includeOpenVulnerabilities", str(validated.include_open_vulnerabilities).lower()),
+        ("includeClosedVulnerabilities", str(validated.include_closed_vulnerabilities).lower()),
+        ("includeDependencySummary", str(validated.include_dependency_summary).lower()),
+        ("includeLicenseHeaders", str(validated.include_license_headers).lower()),
+        ("includePackageLabels", str(validated.include_package_labels).lower()),
+        ("includeHashAndVersionData", str(validated.include_hash_and_version_data).lower()),
+    ]
 
-    # Add format parameter
-    params.append(("format", format))
+    encoded_locator = quote(validated.revision_locator, safe="")
+    path = f"/v2/revisions/{encoded_locator}/attribution/download"
 
-    # Add boolean parameters
-    params.append(("includeDeepDependencies", str(include_deep_dependencies).lower()))
-    params.append(("includeDirectDependencies", str(include_direct_dependencies).lower()))
-    params.append(("includeLicenseList", str(include_license_list).lower()))
-    params.append(("includeLicenseScan", str(include_license_scan).lower()))
-    params.append(("includeProjectLicense", str(include_project_license).lower()))
-    params.append(("includeCopyrightList", str(include_copyright_list).lower()))
-    params.append(("includeFileMatches", str(include_file_matches).lower()))
-    params.append(("includeOpenVulnerabilities", str(include_open_vulnerabilities).lower()))
-    params.append(("includeClosedVulnerabilities", str(include_closed_vulnerabilities).lower()))
-    params.append(("includeDependencySummary", str(include_dependency_summary).lower()))
-    params.append(("includeLicenseHeaders", str(include_license_headers).lower()))
-    params.append(("includePackageLabels", str(include_package_labels).lower()))
-    params.append(("includeHashAndVersionData", str(include_hash_and_version_data).lower()))
+    content, content_type = await client.request_text("GET", path, params=params)
 
-    # Encode the locator in the path (exactly once)
-    encoded_locator = revision_locator  # This will be URL-encoded by the client
+    # Cap raw text uniformly for every format before any further processing,
+    # so JSON formats are truncated too, not just MD/TXT.
+    original_char_count = len(content)
+    truncated = original_char_count > settings.fossa_report_max_chars
+    display_text = content[: settings.fossa_report_max_chars] if truncated else content
 
-    # Make the API call
-    client: FossaClient = context.state["client"]
-
-    # For text formats, we get text response
-    if format in ["MD", "TXT"]:
-        content, content_type = await client.request_text("GET", f"/v2/revisions/{encoded_locator}/attribution/download", params=params)
-
-        # Create the result structure
-        result = {
-            "ok": True,
-            "format": format,
-            "content_type": content_type,
-            "truncated": False,
-            "content": content,
-        }
-
-        # Apply truncation if needed
-        if len(content) > context.settings.fossa_report_max_chars:
-            result["truncated"] = True
-            result["original_char_count"] = len(content)
-            result["content"] = content[:context.settings.fossa_report_max_chars]
-
-        return ToolResponse(
-            endpoint="GET /v2/revisions/{locator}/attribution/download",
-            data=result
-        )
-
-    # For JSON formats, we get JSON response
-    elif format in ["SPDX_JSON", "CYCLONEDX_JSON"]:
-        try:
-            result = await client.request_json("GET", f"/v2/revisions/{encoded_locator}/attribution/download", params=params)
-
-            # Try to parse as JSON and handle appropriately
-            if isinstance(result, str):
-                try:
-                    parsed_result = json.loads(result)
-                    return ToolResponse(
-                        endpoint="GET /v2/revisions/{locator}/attribution/download",
-                        data={
-                            "ok": True,
-                            "format": format,
-                            "content_type": "application/json",
-                            "truncated": False,
-                            "content": parsed_result,
-                        }
-                    )
-                except json.JSONDecodeError:
-                    # If we can't parse it, return the text with error flag
-                    return ToolResponse(
-                        endpoint="GET /v2/revisions/{locator}/attribution/download",
-                        data={
-                            "ok": True,
-                            "format": format,
-                            "content_type": "application/json",
-                            "truncated": False,
-                            "content": result,
-                            "json_parse_error": True
-                        }
-                    )
-            else:
-                return ToolResponse(
-                    endpoint="GET /v2/revisions/{locator}/attribution/download",
-                    data={
-                        "ok": True,
-                        "format": format,
-                        "content_type": "application/json",
-                        "truncated": False,
-                        "content": result,
-                    }
-                )
-        except Exception as e:
-            # If we get an error, try to return it as text
-            content, content_type = await client.request_text("GET", f"/v2/revisions/{encoded_locator}/attribution/download", params=params)
-
-            # Try to parse it if possible
-            try:
-                parsed_result = json.loads(content)
-                return ToolResponse(
-                    endpoint="GET /v2/revisions/{locator}/attribution/download",
-                    data={
-                        "ok": True,
-                        "format": format,
-                        "content_type": content_type,
-                        "truncated": False,
-                        "content": parsed_result,
-                    }
-                )
-            except json.JSONDecodeError:
-                # Return as text with error flag
-                return ToolResponse(
-                    endpoint="GET /v2/revisions/{locator}/attribution/download",
-                    data={
-                        "ok": True,
-                        "format": format,
-                        "content_type": content_type,
-                        "truncated": False,
-                        "content": content,
-                        "json_parse_error": True
-                    }
-                )
-
+    if validated.format in _TEXT_FORMATS:
+        content_value: Any = display_text
+        json_parse_error = False
     else:
-        raise ValueError(f"Unsupported format: {format}")
+        try:
+            content_value = json.loads(display_text)
+            json_parse_error = False
+        except json.JSONDecodeError:
+            content_value = display_text
+            json_parse_error = True
+
+    payload: dict[str, Any] = {
+        "ok": True,
+        "format": validated.format,
+        "content_type": content_type,
+        "truncated": truncated,
+        "content": content_value,
+    }
+    if truncated:
+        payload["original_char_count"] = original_char_count
+    if json_parse_error:
+        payload["json_parse_error"] = True
+
+    return {"ok": True, "endpoint": _ENDPOINT, "data": payload}

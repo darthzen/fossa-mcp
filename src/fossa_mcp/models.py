@@ -1,8 +1,65 @@
-"""Pydantic models for FOSSA MCP server."""
+"""Pydantic models for the FOSSA MCP server.
 
-from typing import List, Optional, Literal, Any
-from pydantic import BaseModel, Field, ConfigDict
+These models are constructed inside each tool function from the tool's flat,
+individually-typed parameters (the shape FastMCP needs to build an accurate
+JSON input schema). Constructing the model runs field- and model-level
+validation before any FOSSA HTTP request is made.
+"""
+
 from datetime import datetime
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Shared enum aliases, reused by both the models below and tool signatures.
+ProjectType = Literal["container", "archive", "provided", "autobuild", "sbom", "binary"]
+InventoryType = Literal["snippet", "vendored"]
+ProjectSort = Literal[
+    "title_asc",
+    "title_desc",
+    "issues-total_asc",
+    "issues-total_desc",
+    "latest-scan_asc",
+    "latest-scan_desc",
+    "last-analyzed_asc",
+    "last-analyzed_desc",
+    "issues-licensing_asc",
+    "issues-licensing_desc",
+    "issues-security_asc",
+    "issues-security_desc",
+    "issues-quality_asc",
+    "issues-quality_desc",
+]
+RefType = Literal["branch", "tag"]
+RevisionSource = Literal[
+    "github", "gitlab", "bitbucket", "azure", "cli", "archive", "container", "sbom", "binary"
+]
+DependencyStatus = Literal["analyzing", "analyzed", "failed", "unknown"]
+DependencyDepth = Literal["direct", "transitive"]
+LayerDepth = Literal["base", "other"]
+HasIssues = Literal[
+    "hasIssues", "hasLicensingIssues", "hasQualityIssues", "hasVulnIssues", "noIssues"
+]
+Confidence = Literal["High", "Medium", "Low", "Unknown"]
+DependencySource = Literal["managed", "vendored"]
+IssueCategory = Literal["licensing", "vulnerability", "quality"]
+IssueStatus = Literal["active", "ignored"]
+ScopeType = Literal["global", "project"]
+ChangeStatus = Literal["new", "remediated", "unchanged"]
+IssueDepth = Literal["direct", "deep"]
+Severity = Literal["critical", "high", "medium", "low", "unknown"]
+SeveritySource = Literal["standard", "custom"]
+IssueSort = Literal[
+    "package_asc",
+    "package_desc",
+    "created_at_asc",
+    "created_at_desc",
+    "severity_asc",
+    "severity_desc",
+    "epss_asc",
+    "epss_desc",
+]
+ReportFormat = Literal["MD", "TXT", "SPDX_JSON", "CYCLONEDX_JSON"]
 
 
 # Input models for tools
@@ -11,31 +68,20 @@ class ProjectListInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    title: Optional[str] = None
-    types: Optional[List[Literal["container", "archive", "provided", "autobuild", "sbom", "binary"]]] = None
-    is_public: Optional[bool] = None
-    labels: Optional[List[str]] = None
-    team_ids: Optional[List[str]] = None
-    latest_scan_days: Optional[int] = None
-    last_revision_within_days: Optional[int] = None
-    locators: Optional[List[str]] = None
-    include_shared_projects: Optional[bool] = None
-    only_include_shared_projects: Optional[bool] = None
-    inventory: Optional[List[Literal["snippet", "vendored"]]] = None
-    sort: Optional[Literal[
-        "title_asc", "title_desc",
-        "issues-total_asc", "issues-total_desc",
-        "latest-scan_asc", "latest-scan_desc",
-        "last-analyzed_asc", "last-analyzed_desc",
-        "issues-licensing_asc", "issues-licensing_desc",
-        "issues-security_asc", "issues-security_desc",
-        "issues-quality_asc", "issues-quality_desc"
-    ]] = None
-    page: int = 1
-    count: int = 20
-
-    # Validation
-    model_validator = None
+    title: str | None = None
+    types: list[ProjectType] | None = None
+    is_public: bool | None = None
+    labels: list[str] | None = None
+    team_ids: list[str] | None = None
+    latest_scan_days: int | None = Field(default=None, ge=0)
+    last_revision_within_days: int | None = Field(default=None, ge=0)
+    locators: list[str] | None = None
+    include_shared_projects: bool | None = None
+    only_include_shared_projects: bool | None = None
+    inventory: list[InventoryType] | None = None
+    sort: ProjectSort | None = None
+    page: int = Field(default=1, ge=1)
+    count: int = Field(default=20, ge=1)
 
 
 class RevisionListInput(BaseModel):
@@ -43,21 +89,15 @@ class RevisionListInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    project_locator: str
-    offset: int = 0
-    count: int = 20
+    project_locator: str = Field(min_length=1)
+    offset: int = Field(default=0, ge=0)
+    count: int = Field(default=20, ge=1)
     resolved_only: bool = True
-    refs: Optional[List[str]] = None
-    refs_type: Optional[Literal["branch", "tag"]] = None
-    source: Optional[Literal[
-        "github", "gitlab", "bitbucket", "azure",
-        "cli", "archive", "container", "sbom", "binary"
-    ]] = None
+    refs: list[str] | None = None
+    refs_type: RefType | None = None
+    source: RevisionSource | None = None
     minimal: bool = True
-    locator_contains: Optional[str] = None
-
-    # Validation
-    model_validator = None
+    locator_contains: str | None = None
 
 
 class DependencyListInput(BaseModel):
@@ -65,32 +105,27 @@ class DependencyListInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    revision_locator: str
-    dependency_locators: Optional[List[str]] = None
-    title: Optional[str] = None
-    statuses: Optional[List[Literal["analyzing", "analyzed", "failed", "unknown"]]] = None
-    depths: Optional[List[Literal["direct", "transitive"]]] = None
-    layer_depths: Optional[List[Literal["base", "other"]]] = None
-    has_issues: Optional[List[Literal[
-        "hasIssues", "hasLicensingIssues", "hasQualityIssues", "hasVulnIssues", "noIssues"
-    ]]] = None
-    licenses: Optional[List[str]] = None
-    fetchers: Optional[List[str]] = None
+    revision_locator: str = Field(min_length=1)
+    dependency_locators: list[str] | None = None
+    title: str | None = None
+    statuses: list[DependencyStatus] | None = None
+    depths: list[DependencyDepth] | None = None
+    layer_depths: list[LayerDepth] | None = None
+    has_issues: list[HasIssues] | None = None
+    licenses: list[str] | None = None
+    fetchers: list[str] | None = None
     show_ignored: bool = False
-    confidence: Optional[List[Literal["High", "Medium", "Low", "Unknown"]]] = None
-    sources: Optional[List[Literal["managed", "vendored"]]] = None
-    package_labels: Optional[List[str]] = None
-    vendored_path: Optional[str] = None
+    confidence: list[Confidence] | None = None
+    sources: list[DependencySource] | None = None
+    package_labels: list[str] | None = None
+    vendored_path: str | None = None
     include_resolution_notes: bool = False
     include_license_text: bool = False
     include_copyright: bool = False
     include_matches: bool = False
     include_download_url: bool = False
-    page: int = 1
-    count: int = 20
-
-    # Validation
-    model_validator = None
+    page: int = Field(default=1, ge=1)
+    count: int = Field(default=20, ge=1)
 
 
 class IssueListInput(BaseModel):
@@ -98,37 +133,64 @@ class IssueListInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    category: Literal["licensing", "vulnerability", "quality"]
-    status: Literal["active", "ignored"] = "active"
-    scope_type: Literal["global", "project"] = "global"
-    project_locator: Optional[str] = None
-    revision_locator: Optional[str] = None
-    compare_to_revision: Optional[str] = None
-    change_status: Optional[Literal["new", "remediated", "unchanged"]] = None
-    issue_ids: Optional[List[int]] = None
-    search: Optional[str] = None
-    depths: Optional[List[Literal["direct", "deep"]]] = None
-    issue_types: Optional[List[str]] = None
-    package_managers: Optional[List[str]] = None
-    cwes: Optional[List[str]] = None
-    project_labels: Optional[List[str]] = None
-    severity: Optional[List[Literal["critical", "high", "medium", "low", "unknown"]]] = None
-    severity_source: Optional[List[Literal["standard", "custom"]]] = None
-    found_before: Optional[datetime] = None
-    found_after: Optional[datetime] = None
-    issue_source: Optional[List[str]] = None
-    sort: Optional[Literal[
-        "package_asc", "package_desc",
-        "created_at_asc", "created_at_desc",
-        "severity_asc", "severity_desc",
-        "epss_asc", "epss_desc"
-    ]] = None
+    category: IssueCategory
+    status: IssueStatus = "active"
+    scope_type: ScopeType = "global"
+    project_locator: str | None = None
+    revision_locator: str | None = None
+    compare_to_revision: str | None = None
+    change_status: ChangeStatus | None = None
+    issue_ids: list[int] | None = None
+    search: str | None = None
+    depths: list[IssueDepth] | None = None
+    issue_types: list[str] | None = None
+    package_managers: list[str] | None = None
+    cwes: list[str] | None = None
+    project_labels: list[str] | None = None
+    severity: list[Severity] | None = None
+    severity_source: list[SeveritySource] | None = None
+    found_before: datetime | None = None
+    found_after: datetime | None = None
+    issue_source: list[str] | None = None
+    sort: IssueSort | None = None
     include_direct_dependency_origin_paths: bool = False
-    page: int = 1
-    count: int = 20
+    page: int = Field(default=1, ge=1)
+    count: int = Field(default=20, ge=1)
 
-    # Validation
-    model_validator = None
+    @model_validator(mode="after")
+    def _validate_scope_and_filters(self) -> "IssueListInput":
+        if self.scope_type == "global":
+            if self.project_locator is not None:
+                raise ValueError("project_locator must be None for global scope")
+            if self.revision_locator is not None:
+                raise ValueError("revision_locator must be None for global scope")
+            if self.compare_to_revision is not None:
+                raise ValueError("compare_to_revision must be None for global scope")
+            if self.change_status is not None:
+                raise ValueError("change_status must be None for global scope")
+        else:
+            if self.project_locator is None:
+                raise ValueError("project_locator is required for project scope")
+            if self.revision_locator is None:
+                raise ValueError("revision_locator is required for project scope")
+            if (self.compare_to_revision is not None) != (self.change_status is not None):
+                raise ValueError(
+                    "compare_to_revision and change_status must be set together or both unset"
+                )
+
+        if self.category != "vulnerability":
+            if self.severity is not None:
+                raise ValueError("severity filter is only allowed for vulnerability category")
+            if self.severity_source is not None:
+                raise ValueError(
+                    "severity_source filter is only allowed for vulnerability category"
+                )
+            if self.cwes is not None:
+                raise ValueError("cwes filter is only allowed for vulnerability category")
+        elif self.issue_types is not None:
+            raise ValueError("issue_types is not allowed for vulnerability category")
+
+        return self
 
 
 class PostureInput(BaseModel):
@@ -136,12 +198,9 @@ class PostureInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    project_locator: str
-    revision_locator: str
-    top_issue_count: int = 10
-
-    # Validation
-    model_validator = None
+    project_locator: str = Field(min_length=1)
+    revision_locator: str = Field(min_length=1)
+    top_issue_count: int = Field(default=10, ge=1, le=25)
 
 
 class AttributionReportInput(BaseModel):
@@ -149,8 +208,8 @@ class AttributionReportInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    revision_locator: str
-    format: Literal["MD", "TXT", "SPDX_JSON", "CYCLONEDX_JSON"] = "MD"
+    revision_locator: str = Field(min_length=1)
+    format: ReportFormat = "MD"
     include_deep_dependencies: bool = True
     include_direct_dependencies: bool = True
     include_license_list: bool = True
@@ -165,20 +224,14 @@ class AttributionReportInput(BaseModel):
     include_package_labels: bool = False
     include_hash_and_version_data: bool = False
 
-    # Validation
-    model_validator = None
 
-
-# Response models for tools
-class ToolResponse(BaseModel):
-    """Base response model for MCP tools."""
-
-    ok: bool = True
-    endpoint: str
-    data: Any
-    meta: Optional[dict] = None
-
-
+# Response models for tools.
+#
+# Direct JSON-backed tools return plain dicts built as the standard envelope
+# (see server.py / tools/*.py) rather than a shared response model, so that
+# optional keys (`meta`, `state`, `message`) are only present when set instead
+# of always appearing as `null`. `fossa_project_posture` has a fixed, richer
+# shape and is modeled explicitly below.
 class PostureResponse(BaseModel):
     """Response model for fossa_project_posture."""
 
@@ -186,8 +239,8 @@ class PostureResponse(BaseModel):
     project_locator: str
     revision_locator: str
     issue_counts: dict[str, int]
-    top_vulnerability_issues: List[Any]
-    top_licensing_issues: List[Any]
-    top_quality_issues: List[Any]
-    direct_dependencies_with_issues: List[Any]
+    top_vulnerability_issues: list[Any]
+    top_licensing_issues: list[Any]
+    top_quality_issues: list[Any]
+    direct_dependencies_with_issues: list[Any]
     analysis_state: Literal["complete", "in_progress"]

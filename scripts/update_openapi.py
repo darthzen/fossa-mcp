@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """Script to update the FOSSA OpenAPI specification."""
 
-import json
-import sys
-import os
-from datetime import datetime
 import hashlib
+import json
+import os
+import sys
+from datetime import datetime
+
 import httpx
 
 # Add src directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-from fossa_mcp.config import Settings
 
 
 def main():
