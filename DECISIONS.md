@@ -45,7 +45,19 @@ Inc.'s own business and we are deliberately not building toward competing with i
 - `FOSSA_API_TOKEN` from the environment is the correct and complete auth model. Do not add
   `token_verifier`, OAuth, or per-request credential plumbing.
 - `stdio` is the default transport and the intended deployment shape.
-- `streamable-http` remains available but binds `127.0.0.1` by default. Keep it that way.
+- `streamable-http` remains available but binds `127.0.0.1` by default. Keep that default.
+  **Kubernetes is the one sanctioned exception:** a pod must bind `0.0.0.0` or the Service can never
+  reach it, so `lab-fleet/09-mcp/fossa-mcp.yaml` sets `FOSSA_HTTP_HOST=0.0.0.0`.
+- **The sdf1 deployment is reachable at `https://fossa-mcp.ash4d.com/mcp`** (Traefik Ingress,
+  cert-manager `letsencrypt-dns`). This is a LAN-scoped exposure, not a public one: the Cloudflare
+  record is public but points at the private Traefik address `192.168.7.150`, so it resolves
+  everywhere and connects only from inside the network. Only `/mcp` is routed; `/healthz` stays
+  cluster-internal.
+
+  The boundary that makes this acceptable is the private target address, nothing else — the server
+  still authenticates no callers, so anyone who reaches that host gets the token's full read access.
+  A Cloudflare Tunnel, a public A record, or a LoadBalancer on a routable address all cross that
+  boundary and require an authenticating middleware in front first.
 - `FossaClient` is a single lifespan-scoped instance with one connection pool. Correct *because* of
   this decision; it would be wrong under multi-tenancy.
 - **The server executes every request with the single token it was started with.** Exposing the HTTP

@@ -61,6 +61,22 @@ class Settings(BaseSettings):
     def _strip_trailing_slash(cls, value: str) -> str:
         return value.rstrip("/")
 
+    @field_validator("fossa_api_token")
+    @classmethod
+    def _strip_token_whitespace(cls, value: str | None) -> str | None:
+        """Tolerate surrounding whitespace in the supplied token.
+
+        Tokens routinely arrive from a file or a Kubernetes Secret created with
+        `--from-file`, both of which keep the trailing newline. Sending that
+        newline in the Authorization header fails every request with a 401 that
+        looks like a bad token rather than a bad newline. An empty or
+        whitespace-only value is treated as absent.
+        """
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
     @property
     def base_url(self) -> str:
         """Get the base URL without a trailing slash. Already includes `/api`."""
