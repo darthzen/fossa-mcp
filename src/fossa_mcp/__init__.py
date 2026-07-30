@@ -1,0 +1,1 @@
+"""FOSSA MCP Server package."""
