@@ -5,9 +5,10 @@ import sys
 
 import pytest
 
-# Add src directory to Python path for imports (editable-install .pth
-# resolution is unreliable in some sandboxed environments; this mirrors how
-# `uv run pytest` is expected to work regardless).
+# Add src to sys.path so the suite runs even when the editable install's .pth
+# file is not honored. Concretely: iCloud Drive sets the macOS `hidden` flag on
+# synced files and CPython 3.13+ skips hidden .pth files, so a `.venv` inside an
+# iCloud folder yields an importable-nowhere package (see README).
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from fossa_mcp.config import Settings  # noqa: E402

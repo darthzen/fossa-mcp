@@ -1,6 +1,6 @@
 [project]
 name = "fossa-mcp"
-version = "0.1.0"
+version = "0.1.1"
 description = "Model Context Protocol server for FOSSA API"
 authors = [
     {name = "Rick Ashford", email = "rick@theashfords.org"}
@@ -56,6 +56,10 @@ typeCheckingMode = "basic"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Live tests are opt-in: `uv run pytest` must never touch the network, even on a
+# machine that happens to export FOSSA_API_TOKEN. Run them with
+# `uv run pytest -m live`.
+addopts = "-m 'not live'"
 markers = [
     "live: requires a real FOSSA_API_TOKEN and network access",
 ]

@@ -66,6 +66,29 @@ mcp.tool(name="fossa_get_attribution_report", annotations=_READ_ONLY)(
     reports.get_attribution_report
 )
 
+
+def _forbid_unexpected_tool_arguments(server: FastMCP) -> None:
+    """Make tools reject unknown arguments instead of silently dropping them.
+
+    FastMCP 1.28 generates each tool's argument model with Pydantic's default
+    `extra="ignore"`, so a client that passes a misspelled or invented argument
+    gets a successful call with that argument discarded — an easy way for a
+    model to believe it applied a filter that never reached FOSSA. Tighten every
+    generated model and republish its JSON schema so `additionalProperties:
+    false` is advertised too.
+
+    This reaches into the tool manager because 1.28 exposes no public hook. Fold
+    it into tool registration when moving to the 2.x SDK (see DECISIONS.md).
+    """
+    for tool in server._tool_manager._tools.values():
+        arg_model = tool.fn_metadata.arg_model
+        arg_model.model_config["extra"] = "forbid"
+        arg_model.model_rebuild(force=True)
+        tool.parameters = arg_model.model_json_schema(by_alias=True)
+
+
+_forbid_unexpected_tool_arguments(mcp)
+
 _ALLOWED_TRANSPORTS = ("stdio", "streamable-http")
 
 

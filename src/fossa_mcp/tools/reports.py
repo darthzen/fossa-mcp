@@ -96,16 +96,20 @@ async def get_attribution_report(
             content_value = display_text
             json_parse_error = True
 
-    payload: dict[str, Any] = {
+    # This tool's result shape is defined directly by the scope (§13.9) rather
+    # than the standard `{ok, endpoint, data}` envelope used by the JSON-backed
+    # tools: report content sits at the top level, not under `data`.
+    result: dict[str, Any] = {
         "ok": True,
+        "endpoint": _ENDPOINT,
         "format": validated.format,
         "content_type": content_type,
         "truncated": truncated,
         "content": content_value,
     }
     if truncated:
-        payload["original_char_count"] = original_char_count
+        result["original_char_count"] = original_char_count
     if json_parse_error:
-        payload["json_parse_error"] = True
+        result["json_parse_error"] = True
 
-    return {"ok": True, "endpoint": _ENDPOINT, "data": payload}
+    return result

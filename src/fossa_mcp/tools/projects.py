@@ -7,7 +7,7 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
-from ..models import InventoryType, ProjectListInput, ProjectSort, ProjectType
+from ..models import InventoryType, ProjectListInput, ProjectSort, ProjectType, RefType
 from ..query import add_repeated, bool_to_str
 
 
@@ -101,7 +101,7 @@ async def get_project(
     ctx: Context,
     project_locator: str,
     ref: str | None = None,
-    ref_type: str = "branch",
+    ref_type: RefType = "branch",
 ) -> dict[str, Any]:
     """
     Get detailed metadata about exactly one FOSSA project.
@@ -111,8 +111,6 @@ async def get_project(
     """
     if not project_locator:
         raise ValueError("Project locator must not be blank")
-    if ref_type not in ("branch", "tag"):
-        raise ValueError("ref_type must be 'branch' or 'tag'")
 
     lifespan_ctx = ctx.request_context.lifespan_context
     client: FossaClient = lifespan_ctx["client"]
@@ -120,7 +118,9 @@ async def get_project(
     params: list[tuple[str, str]] = []
     if ref is not None:
         params.append(("ref", ref))
-        params.append(("refType", ref_type))
+        # `ref_type`, not `refType`: getProject uses the snake_case key, the
+        # same as getProjectRevisions' `refs_type`.
+        params.append(("ref_type", ref_type))
 
     encoded_locator = quote(project_locator, safe="")
 

@@ -6,12 +6,15 @@ registration, JSON schema validation, and MCP-level error surfacing
 (`isError=True`) are exercised exactly as a real MCP client would see them.
 """
 
+import logging
+
 import httpx
 import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 from mcp.types import TextContent
 
 from fossa_mcp.server import mcp
+from fossa_mcp.server import settings as server_settings
 
 EXPECTED_TOOL_NAMES = {
     "fossa_list_projects",
@@ -72,6 +75,47 @@ async def test_business_rule_violation_rejected_before_any_http_request(respx_mo
 
     assert result.isError is True
     assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_unexpected_argument_rejected_before_any_http_request(respx_mock):
+    async with create_connected_server_and_client_session(mcp) as session:
+        result = await session.call_tool(
+            "fossa_list_projects", {"count": 5, "not_a_real_argument": "x"}
+        )
+
+    # An ignored unknown argument would let a model believe it applied a filter
+    # that never reached FOSSA, so the call must fail instead.
+    assert result.isError is True
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_tool_schemas_forbid_additional_properties():
+    async with create_connected_server_and_client_session(mcp) as session:
+        result = await session.list_tools()
+
+    for tool in result.tools:
+        assert tool.inputSchema.get("additionalProperties") is False, tool.name
+
+
+@pytest.mark.asyncio
+async def test_token_absent_from_tool_output_and_logs(monkeypatch, respx_mock, caplog):
+    # Patch the settings object the lifespan builds its client from, so the
+    # token really does reach the Authorization header for this call.
+    monkeypatch.setattr(server_settings, "fossa_api_token", "leaky-token-value")
+    route = respx_mock.get("https://app.fossa.com/api/v2/projects").mock(
+        return_value=httpx.Response(401, json={"message": "Invalid token", "name": "Unauthorized"})
+    )
+
+    with caplog.at_level(logging.DEBUG):
+        async with create_connected_server_and_client_session(mcp) as session:
+            result = await session.call_tool("fossa_list_projects", {})
+
+    assert route.calls.last.request.headers["Authorization"] == "Bearer leaky-token-value"
+    assert result.isError is True
+    assert "leaky-token-value" not in result.model_dump_json()
+    assert "leaky-token-value" not in caplog.text
 
 
 @pytest.mark.asyncio

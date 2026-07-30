@@ -46,18 +46,23 @@ async def test_no_double_api_prefix(settings, respx_mock):
 )
 @pytest.mark.asyncio
 async def test_locator_path_encoding_no_double_encoding(settings, respx_mock, locator):
-    from urllib.parse import quote
+    from urllib.parse import quote, unquote
 
     encoded = quote(locator, safe="")
-    respx_mock.get(f"https://app.fossa.com/api/projects/{encoded}").mock(
+    route = respx_mock.get(f"https://app.fossa.com/api/projects/{encoded}").mock(
         return_value=httpx.Response(200, json={})
     )
     client = FossaClient(settings)
     await client.request_json("GET", f"/projects/{encoded}")
     await client.aclose()
 
-    # No application-created double-encoding, e.g. "%2F" becoming "%252F".
-    assert "%25" not in encoded
+    # Assert on the path httpx actually put on the wire: the locator must be
+    # encoded exactly once, so a single unquote round-trip recovers it and no
+    # "%2F" was re-encoded into "%252F".
+    raw_path = route.calls.last.request.url.raw_path.decode()
+    assert raw_path == f"/api/projects/{encoded}"
+    assert "%25" not in raw_path
+    assert unquote(raw_path) == f"/api/projects/{locator}"
 
 
 @pytest.mark.asyncio
