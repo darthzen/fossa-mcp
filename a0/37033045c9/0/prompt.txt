@@ -1,9 +1,1 @@
 Open FOSSA_MCP_IMPLEMENTATION_SCOPE.md and start implementing the spec
-
----
-
-Do you know how to use the hooks for entire.io to commit this code correctly with the expected metadata?
-
----
-
-Add .DS_Store and .claude to .gitignore

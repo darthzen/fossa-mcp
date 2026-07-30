@@ -3,41 +3,11 @@
   "checkpoint_id": "a037033045c9",
   "session_id": "411e4fe1-30af-47ca-bc90-5670f8fd1c65",
   "strategy": "manual-commit",
-  "created_at": "2026-07-30T02:35:11.981629Z",
-  "branch": "main",
+  "created_at": "2026-07-30T02:35:28.462621Z",
   "checkpoints_count": 6,
-  "save_step_count": 2,
-  "files_touched": [
-    ".env.example",
-    ".gitignore",
-    "IMPLEMENTATION_SUMMARY.md",
-    "README.md",
-    "pyproject.toml",
-    "scripts/update_openapi.py",
-    "spec/README.md",
-    "src/fossa_mcp/__init__.py",
-    "src/fossa_mcp/__main__.py",
-    "src/fossa_mcp/client.py",
-    "src/fossa_mcp/config.py",
-    "src/fossa_mcp/errors.py",
-    "src/fossa_mcp/models.py",
-    "src/fossa_mcp/query.py",
-    "src/fossa_mcp/server.py",
-    "src/fossa_mcp/tools/__init__.py",
-    "src/fossa_mcp/tools/dependencies.py",
-    "src/fossa_mcp/tools/issues.py",
-    "src/fossa_mcp/tools/posture.py",
-    "src/fossa_mcp/tools/projects.py",
-    "src/fossa_mcp/tools/reports.py",
-    "src/fossa_mcp/tools/revisions.py",
-    "tests/conftest.py",
-    "tests/test_client.py",
-    "tests/test_mcp_integration.py",
-    "tests/test_query.py"
-  ],
+  "files_touched": null,
   "agent": "Claude Code",
   "model": "qwen3-coder:30b",
-  "turn_id": "fa08dc506d6f",
   "compact_transcript_start": 0,
   "token_usage": {
     "input_tokens": 3469645,
@@ -45,62 +15,5 @@
     "cache_read_tokens": 0,
     "output_tokens": 6392,
     "api_call_count": 47
-  },
-  "session_metrics": {
-    "turn_count": 6
-  },
-  "initial_attribution": {
-    "calculated_at": "2026-07-30T02:35:11.95913Z",
-    "agent_lines": 2133,
-    "agent_removed": 0,
-    "human_added": 0,
-    "human_modified": 6,
-    "human_removed": 3,
-    "total_committed": 2139,
-    "total_lines_changed": 2145,
-    "agent_percentage": 99.44055944055944,
-    "metric_version": 2
-  },
-  "prompt_attributions": [
-    {
-      "checkpoint_number": 1,
-      "user_lines_added": 2394,
-      "user_lines_removed": 3,
-      "agent_lines_added": 0,
-      "agent_lines_removed": 0,
-      "user_added_per_file": {
-        ".claude/settings.json": 3,
-        "FOSSA_MCP_IMPLEMENTATION_SCOPE.md": 2391
-      },
-      "user_removed_per_file": {
-        ".claude/settings.json": 3
-      }
-    },
-    {
-      "checkpoint_number": 2,
-      "user_lines_added": 3,
-      "user_lines_removed": 3,
-      "agent_lines_added": 4531,
-      "agent_lines_removed": 0,
-      "user_added_per_file": {
-        ".claude/settings.json": 3
-      },
-      "user_removed_per_file": {
-        ".claude/settings.json": 3
-      }
-    },
-    {
-      "checkpoint_number": 3,
-      "user_lines_added": 3,
-      "user_lines_removed": 3,
-      "agent_lines_added": 4533,
-      "agent_lines_removed": 0,
-      "user_added_per_file": {
-        ".claude/settings.json": 3
-      },
-      "user_removed_per_file": {
-        ".claude/settings.json": 3
-      }
-    }
-  ]
+  }
 }
