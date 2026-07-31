@@ -1,0 +1,53 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "8dffe2ebe287",
+  "session_id": "899a85f2-f3de-4884-af5c-d4ca8f9faf54",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-31T21:37:46.659405Z",
+  "branch": "skills-hardening",
+  "checkpoints_count": 1,
+  "save_step_count": 2,
+  "files_touched": [
+    "skills/fossa-api-audit/SKILL.md",
+    "skills/fossa-attribution/SKILL.md",
+    "skills/fossa-license-review/SKILL.md",
+    "skills/fossa-spec-drift/SKILL.md",
+    "skills/fossa-vuln-export/SKILL.md",
+    "skills/fossa-vuln-export/references/field-mapping.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "bbc8a5e9d8b6",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 197,
+    "cache_creation_tokens": 225520,
+    "cache_read_tokens": 16800759,
+    "output_tokens": 76407,
+    "api_call_count": 104
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-31T21:37:46.605413Z",
+    "agent_lines": 355,
+    "agent_removed": 116,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 355,
+    "total_lines_changed": 471,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
