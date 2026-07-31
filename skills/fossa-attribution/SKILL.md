@@ -79,6 +79,28 @@ The response is not the standard envelope: report content sits at the top
 level as `content`, with `format`, `content_type`, and a `truncated` flag
 beside it. **Check `truncated` before using the content** — see Traps.
 
+**Gate on content before building anything.** A structurally complete report
+can still be empty: on some orgs every cell of the dependency table's
+Licenses column comes back as `-`, with no license names, texts, or copyright
+holders anywhere in the body. A document built from that report looks
+plausible and is 100% gaps — the exact failure this skill exists to prevent.
+So verify, immediately after the pull, that the body actually carries license
+names and texts. If it does not, the report is empty for this org; do not
+build from it. The per-package path is the *other primary path*, not a
+degraded fallback — choose it whenever the report fails this gate (or
+truncates, per Traps):
+
+```
+fossa_list_dependencies(revision_locator="...", include_license_text=True,
+                        include_copyright=True, page=..., count=25)
+```
+
+paged through per step 6. With the include flags on, each dependency carries
+its license objects under `licenseGroups[].licenses[]`, with the full text in
+`.text` and the holder line in `.copyright` (observed live; the vendored spec
+declares the `licenseGroups[].licenses[]` container but not the two
+flag-gated fields).
+
 ## 3. Agree the inclusion scope with the user
 
 Two decisions, and they are the user's, not yours — ask before generating:
@@ -98,22 +120,33 @@ The default, absent instruction: all runtime dependencies, direct and
 transitive. Record the chosen scope in the generated file's header so a reader
 knows what the document claims to cover.
 
+If no user is reachable (a headless run), do not stall on the questions:
+include everything the scan analyzed, and record that decision in the
+document header — scope defaulted to all analyzed dependencies, no user
+confirmation — so a reviewer knows to revisit it.
+
 FOSSA's report does not itself distinguish runtime from dev in every
-ecosystem. Where the report includes packages the user excluded (or the scan
-was configured to include dev dependencies), filter against
-`fossa_list_dependencies` data and the project's own manifests, and say in the
-report what you filtered and why.
+ecosystem. In particular, npm dependency data carries no runtime-vs-dev flag
+at all, so runtime-only filtering there needs the project's own manifest
+(`package.json` / lockfile) — which may not be locally available; when it
+isn't, say so and ship the broader scope rather than guessing. Where the
+report includes packages the user excluded (or the scan was configured to
+include dev dependencies), filter against `fossa_list_dependencies` data and
+the project's own manifests, and say in the report what you filtered and why.
 
 ## 4. Generate the output file(s)
 
 Two shapes, matching this repo's own artifacts. Generate the one(s) the user
 asked for; when unspecified, offer both.
 
-**NOTICE-style summary** — one entry per package: name, version, license,
-copyright holder. Match the layout of the repo's own `NOTICE`: product name
-and copyright at the top, then delimited sections; the third-party section
-names the license families in use and calls out anything non-permissive
-individually (the repo's `NOTICE` does exactly this for certifi's MPL-2.0).
+**NOTICE-style summary** — family-summary prose plus a per-package table.
+The repo's own `NOTICE` is the model for the prose, not for per-package
+entries: product name and copyright at the top, then delimited sections; its
+third-party section names the license families in use and calls out the one
+non-permissive exception individually (certifi's MPL-2.0). Follow that
+shape, then append a per-package table — name, version, license, copyright
+holder — which the repo's `NOTICE` itself doesn't carry but a shippable
+notice for a customer project should.
 
 **Full THIRD_PARTY_LICENSES** — the worked example is
 `scripts/generate_third_party_licenses.py`, which produces the format to
@@ -132,6 +165,10 @@ above)` — is the in-file marker for a missing text. Use the same pattern, but
 *also* list every such package in the gaps section (step 5); an inline marker
 alone is too easy to miss in a 10,000-line file.
 
+If either reference file is absent from the working checkout, read it from
+the default branch instead: `git show origin/main:NOTICE` and
+`git show origin/main:scripts/generate_third_party_licenses.py`.
+
 Write the files locally (in the directory the user names, or the current
 project root). Do not commit them into the customer repo unless asked.
 
@@ -147,9 +184,14 @@ requiring review", present even when empty ("none"), listing:
   aggregate report lacks.
 - **Unknown / unlicensed packages** — declared license missing or "UNKNOWN".
   These are the highest-risk entries in the file; name them first.
-- **Multiple / ambiguous licenses** — dual-licensed packages. Record *which
-  license was elected* for this distribution and on whose decision (the
-  user's, or FOSSA's configured policy). "MIT OR GPL-2.0" with no election
+- **Multiple / ambiguous licenses** — dual-licensed packages. FOSSA records
+  license elections: before filing one as "no documented election", check
+  `fossa_get_dependency` → `rootProjects[].conclusions`, whose
+  `scoped.licenses` (with `lastEditedBy` / `updatedAt`) and `base.licenses`
+  (with `justification`) hold the concluded license(s) for this project —
+  most such gaps resolve there. Then record *which license was elected* for
+  this distribution and on whose decision (the user's, FOSSA's configured
+  policy, or a recorded conclusion). "MIT OR GPL-2.0" with no election
   recorded is an unfinished entry.
 - **Missing copyright holders** — entries where `include_copyright_list`
   returned nothing for the package. The license section still ships; the
@@ -168,8 +210,12 @@ Pull the authoritative dependency list and count it against the document:
 fossa_list_dependencies(revision_locator="...", depths=["direct", "transitive"], count=100)
 ```
 
-Paginate (`page=2, 3, ...`) until a page comes back short — `count` is capped
-at 100 per page. Filter to the agreed scope from step 3, then verify: **every
+The response's `data.total` is the authoritative count — total matching
+dependencies across all pages. Paginate (`page=2, 3, ...`) until you have
+collected `total` entries, rather than stopping at "a page came back short";
+`count` is capped at 100 per page, and small values are clamped *up* to 25
+(count=1 has returned 25 entries), so the page size you asked for is not the
+page size you got. Filter to the agreed scope from step 3, then verify: **every
 dependency in the list appears either in the document body or in the flagged
 gaps section.** Do the arithmetic and state it in your closing report, e.g.
 "87 runtime dependencies in FOSSA; 84 attributed in full, 3 in the gaps
@@ -186,9 +232,10 @@ what resolving each would take.
   `FOSSA_REPORT_MAX_CHARS`, raisable to 1,000,000). The response says so via
   `truncated: true` plus `original_char_count` — check it every time. A
   full-license-texts report for a large project blows through the cap easily.
-  When it does: raise the env var if you control the server, or assemble the
-  license texts per-package via `fossa_list_dependencies(...,
-  include_license_text=True)` page by page instead of from the one big report.
+  When it does: raise the env var if you control the server, or switch to
+  the per-package path (step 2) and assemble the license texts via
+  `fossa_list_dependencies(..., include_license_text=True)` page by page
+  instead of from the one big report.
 - **Truncation applies to the JSON formats too**, and a truncated
   `SPDX_JSON`/`CYCLONEDX_JSON` body is broken JSON — the tool then returns the
   raw string with `json_parse_error: true` instead of a parsed object. Do not
@@ -201,7 +248,16 @@ what resolving each would take.
 - **`fossa_list_dependencies` license fields are off by default** —
   `include_license_text` and `include_copyright` are both False. The cheap
   reconciliation pass (step 6) leaves them off; only turn them on when using
-  the list as the license-text *source* after a truncated report.
+  the list as the license-text *source* (the step 2 per-package path).
+- **With the include flags on, `fossa_list_dependencies` responses overflow
+  the client's tool-result limit at even 25 entries** (599KB observed for one
+  page with texts on). Expect the harness to save the oversized result to a
+  file instead of returning it inline; query that file with `jq` or Python,
+  and never re-read the raw JSON back into context.
+- **The report's per-package "Usage" field can label every package Direct**
+  (observed: 165 of 165, including depth-7 transitives). For
+  direct-vs-transitive decisions trust the `depth` field on each entry from
+  `fossa_list_dependencies`, not the report.
 - **The report can be slow on large projects.** It is a single synchronous
   download — FOSSA renders the whole report before the first byte. There is
   no polling to do; just do not conclude the tool is broken because one call

@@ -46,7 +46,16 @@ finding. Four models, in descending order of how much they obligate:
    network-interaction clause is exactly the case the license was written for.
 4. **Internal-only** — tooling, services, and scripts that never leave the
    organization. Almost nothing fires; attribution obligations technically
-   attach to copies but there is no external audience.
+   attach to copies but there is no external audience — no distributed
+   artifact means no NOTICE file to ship, which is how step 4 states the same
+   fact.
+
+When there is no user to ask and no repo on disk, infer the model from the
+FOSSA metadata itself — project title, description, and commit messages
+usually say whether the thing is a CLI, a published package, or a backend
+service. State in the report's basis block that the model was inferred and
+from what, and show the counterfactual: which additional findings would fire
+under the next model up.
 
 Also establish, where knowable, **how copyleft dependencies are linked**:
 static linking, dynamic linking, or a separate process. It decides LGPL
@@ -64,6 +73,11 @@ Resolve the project first — never guess a locator:
 ```
 fossa_list_projects(title=...)
 ```
+
+If the ask is "which project has licensing problems" rather than a named
+project, discover it first: `fossa_list_projects(sort="issues-licensing_desc")`
+ranks the organization by open licensing-issue count; confirm the target with
+the user before auditing it.
 
 Take the project locator and `latestRevision.locator` from the result (or a
 specific revision from `fossa_list_project_revisions` if the user named one).
@@ -96,6 +110,11 @@ returns each dependency with its licenses. Useful filters while working:
 `include_copyright=true` when attribution text will be needed. Page until the
 list is exhausted — an audit of page one is not an audit.
 
+Dependency pages are large: at `count=100` the response overflows the client's
+tool-output limit (~126k characters observed on a 165-dependency project), and
+even `count=25` can. Save each page to a file and query it with jq or python;
+do not try to read pages inline.
+
 For any single package that needs a closer look — license text, resolution
 notes, copyright — use the exact locator the list returned:
 
@@ -103,8 +122,9 @@ notes, copyright — use the exact locator the list returned:
 fossa_get_dependency(revision_locator=..., dependency_revision_locator=...)
 ```
 
-A `state: "analysis_in_progress"` response (HTTP 202 underneath) means the scan
-is still running; say so and do not audit a partial dependency list.
+An `analysis_state: "in_progress"` in the posture response (HTTP 202
+underneath) means the scan is still running; say so and do not audit a partial
+dependency list.
 
 ## 3. Classify every license by obligation class
 
@@ -115,9 +135,10 @@ tiers in [[fossa-suggest-score]]:
 |---|---|---|
 | **Strong copyleft** | GPL-2.0, GPL-3.0, AGPL-3.0 | Distributing the work (or, for AGPL, serving it over a network) obligates releasing the combined work's source under the same license. GPL-2.0 and GPL-3.0 are mutually incompatible — note which one. |
 | **Weak copyleft** | LGPL, MPL, EPL, CDDL | File- or library-scoped: modifications to the covered code must be released, but the rest of the work stays yours. LGPL adds the relinking requirement for static linking. |
-| **Permissive with attribution** | MIT, BSD-2/3-Clause, Apache-2.0, ISC | Ship the license text and copyright notices. Apache-2.0 additionally requires preserving the NOTICE file if upstream has one, and carries an explicit patent grant with a retaliation clause — relevant in M&A review. |
-| **Public-domain-equivalent** | CC0, Unlicense, 0BSD | Nothing. Exclude from the action list entirely. |
-| **Unknown / custom / unlicensed** | no license found, custom text, "SEE LICENSE IN ..." | **The dangerous bucket.** No license means no grant — treat as all-rights-reserved until resolved. A custom license means someone has to read it. Never classify this bucket as permissive because the package "looks like" MIT-adjacent. |
+| **Share-alike content licenses** | CC-BY-SA, CC-BY | Creative Commons licenses attach to *content* — docs, images, fonts, datasets bundled in a package — not to the code around it. CC-BY-SA is share-alike: if the covered content ships in the artifact, derivatives of that content must stay CC-BY-SA. CC-BY asks only for attribution. Identify *what* is covered before treating the flag as a code problem. |
+| **Permissive with attribution** | MIT, BSD-2/3-Clause, Apache-2.0, ISC, FTL, BlueOak-1.0.0, Unicode-DFS-2016, W3C-20150513 | Ship the license text and copyright notices. Apache-2.0 additionally requires preserving the NOTICE file if upstream has one, and carries an explicit patent grant with a retaliation clause — relevant in M&A review. FTL asks for a credit acknowledgment in documentation. |
+| **Public-domain-equivalent** | CC0, Unlicense, 0BSD, WTFPL, `public-domain` | Nothing. Exclude from the action list entirely. |
+| **Unknown / custom / unmapped** | no license found, custom text, "SEE LICENSE IN ...", **any license not mapped above** | **The dangerous bucket, and the catch-all — every license gets a home, and this is the home of last resort.** No license means no grant — treat as all-rights-reserved until resolved. A custom or unmapped license means someone has to read it. Never classify this bucket as permissive because the package "looks like" MIT-adjacent. |
 
 Two situations that cut across the classes:
 
@@ -125,7 +146,10 @@ Two situations that cut across the classes:
   offerings). The customer must *elect* one and document the election. FOSSA
   may list both licenses on the dependency; the finding is "no documented
   election", and the usual remediation is electing the permissive option in
-  writing.
+  writing. But FOSSA's `licenses` array does not distinguish an OR-election
+  from an AND-aggregate — sharp's `FTL + LGPL-3.0-or-later` is both-apply,
+  not choose-one — so verify upstream that a choice actually exists before
+  recommending an election.
 - **License change on upgrade.** A version bump can cross a relicensing
   boundary — BUSL, SSPL, and Elastic-2.0 conversions are the common ones.
   When a remediation elsewhere in the report recommends upgrading a package,
@@ -140,11 +164,18 @@ whether it fires:
 1. **Distribution model** (step 1). Strong and weak copyleft obligations
    trigger on distribution — so under SaaS-only or internal-only, GPL, LGPL,
    MPL, EPL, and CDDL findings are noise *unless the license is AGPL*, which
-   fires under SaaS. Attribution obligations follow distribution too: no
-   distribution, no NOTICE file to ship.
-2. **Dependency role.** Runtime vs dev/build-only (`depths` and the manifest
-   tell you; a GPL linter or test framework never enters the shipped artifact
-   and is noise in every model). Direct vs transitive changes who can fix it,
+   fires under SaaS. Attribution obligations follow distribution too: the
+   terms still attach to internal copies, but with nothing distributed there
+   is no NOTICE file to ship. A corollary worth stating in the report:
+   internal-only and SaaS-only produce identical action lists unless AGPL (or
+   another network-copyleft term) is present — the swap that changes
+   everything is crossing the distribution line.
+2. **Dependency role.** Runtime vs dev/build-only — a GPL linter or test
+   framework never enters the shipped artifact and is noise in every model.
+   FOSSA's data carries no dev/prod flag (`depths` is direct-vs-transitive,
+   not role), so role comes from the manifest when the repo is on disk, and
+   otherwise from package knowledge, stated as judgment in the report.
+   Direct vs transitive changes who can fix it,
    not whether it fires — a transitive GPL in a shipped binary fires exactly
    as hard, but the remediation is an exclusion or an upstream issue rather
    than a swap.
@@ -167,6 +198,9 @@ the author, or remove the package; it cannot be closed from FOSSA data alone.
 
 Lead with the verdict in one sentence: N licensing findings, M require action
 for **this** distribution model, stated by name ("SaaS-only, so M of N").
+When M is zero, the empty action table is itself the deliverable: say that
+nothing fires under this model, then say what would fire under the next model
+up — that counterfactual is what makes an all-clear trustworthy.
 
 Then, in order:
 
@@ -174,6 +208,13 @@ Then, in order:
   obligation, why it fires *here* (which distribution/role/linkage fact
   triggered it), and the remediation options from step 4 with a recommended
   one. Order by severity of consequence, strong copyleft first.
+- **Conflicts as their own block.** `policy_conflict` findings are neither
+  action, noise, nor unknown — they are FOSSA saying a license's terms
+  conflict with the policy, and they stay open until reconciled in FOSSA.
+  Report them under their own heading with the obligation stated from the
+  license class in step 3, not from the issue: `policy_conflict` issues can
+  arrive with empty `details`, so the issue body cannot be the source of the
+  obligation text.
 - **The noise, explained in one paragraph.** Not a table — one paragraph
   saying why the remaining findings do not fire for this customer ("the four
   LGPL and two MPL findings do not reach a SaaS deployment; the GPL-2.0 flag
@@ -201,6 +242,14 @@ into this report.
   `fossa_get_dependency` with `include_license_text=true` and check the
   resolution notes before classifying — the audit classifies what is actually
   in the code, and a mismatch is itself a finding worth reporting.
+- **FOSSA may have already concluded the license.** Before recommending any
+  remediation, pull `fossa_get_dependency` and check
+  `rootProjects[].conclusions` — `scoped.licenses` holds a project-scoped
+  conclusion, `base.licenses` an organization-wide one. A concluded license
+  (say, concluded MIT over a scary discovered name) supersedes the discovery;
+  if a policy flag is still open against the old name, the finding is
+  "reconcile the conclusion with the still-open flag in FOSSA", not
+  "remediate the package".
 - **"Unlicensed" is not "permissive".** The absence of a flagged issue on an
   unlicensed package means the FOSSA policy didn't flag it, not that anyone
   granted rights. No license, no grant.

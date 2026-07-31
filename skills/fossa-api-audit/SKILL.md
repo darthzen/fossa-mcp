@@ -20,9 +20,11 @@ hardcodes any of the three answers a question nobody asked.
 
 **The honest framing, stated up front and never dropped:** "live-verified"
 means one successful call, from one org, at one moment. And the spec cannot
-always be failed against: several GET operations declare a bodyless or
-property-less 200 (6 of 157 at API 4.34.55, `GET /projects/{locator}` the
-known worst case), so a live response full of fields the spec never mentions is
+always be failed against: some GET operations give you nothing to compare a
+200 against — at 4.34.55 that is 4 of 157, counting the 3 that document no 200
+response at all plus `GET /projects/{locator}` (the known worst case), whose
+200 schema is an object with zero properties — so a live response full of
+fields the spec never mentions is
 a **spec gap to report, not a server bug to flag**. Keep the two verdicts
 separate everywhere they appear.
 
@@ -34,10 +36,13 @@ Run from the repo root. Results are branch-specific — name the branch
 Confirm the spec exists before anything else. It lives at
 `spec/fossa-openapi.json` on the branches where this skill is used
 (`api-parity`, `security-policy-writes`) but not on every branch — if the file
-is missing, read it out of git without switching branches:
+is missing, read it out of git without switching branches, and point `SPEC`
+at the copy — every snippet in this skill reads `$SPEC`, which defaults to the
+checked-in path:
 
 ```bash
 git show api-parity:spec/fossa-openapi.json > "$TMPDIR/fossa-openapi.json"
+export SPEC="$TMPDIR/fossa-openapi.json"
 ```
 
 Do **not** reach for `scripts/update_openapi.py` as the fallback: regeneration
@@ -46,24 +51,32 @@ the code was written against, and that silently moves the goalposts of the
 audit. Regenerate only if the user asks.
 
 ```bash
-python3 - <<'EOF'
-import json
-spec = json.load(open("spec/fossa-openapi.json"))
+SPEC=${SPEC:-spec/fossa-openapi.json}
+python3 - "$SPEC" <<'EOF'
+import json, os, sys
+spec = json.load(open(sys.argv[1]))
 ops = sorted((m.upper(), p) for p, item in spec["paths"].items()
              for m in item if m in ("get", "post", "put", "patch", "delete"))
 gets = [o for o in ops if o[0] == "GET"]
 print(f"API {spec['info']['version']}: {len(spec['paths'])} paths, "
       f"{len(ops)} operations ({len(gets)} GET, {len(ops)-len(gets)} write-method)")
-for m, p in ops:
-    print(m, p)
+out = os.path.join(os.environ.get("TMPDIR", "/tmp"), "fossa-ops.txt")
+with open(out, "w") as f:
+    f.writelines(f"{m} {p}\n" for m, p in ops)
+print("full operation list:", out)
 EOF
 ```
+
+Counts only in the transcript: do not print all 271 operations inline — group
+and count, and let the full list live in the scratch file, where step 3's
+domain grouping reads it.
 
 At 4.34.55 that prints 191 paths and 271 operations, 157 GET / 114
 write-method. The method split is a first cut, not the truth: `POST
 /v2/projects` is a documented **read** (the filter set moves into the body when
-the query string gets long), and `fossa_list_projects` genuinely issues it.
-Classify by what the operation does, not only by its verb.
+the query string gets long); whether any registered tool actually issues it has
+varied by branch — step 2 settles that from the module. Classify by what the
+operation does, not only by its verb.
 
 ## 2. Derive the registered tool surface
 
@@ -73,9 +86,13 @@ branch of this repo right now.
 
 ```bash
 grep -n 'mcp.tool(name=' src/fossa_mcp/server.py
-grep -n 'from .tools import' src/fossa_mcp/server.py
+sed -n '/from .tools import/,/)/p' src/fossa_mcp/server.py
 ls src/fossa_mcp/tools/
 ```
+
+The import's shape varies by branch: when it is a multi-line parenthesized
+block, a plain grep returns only its opening line and hides most of the
+imported modules. The `sed` range prints the whole statement in either form.
 
 The difference between the second and third commands matters: a module in
 `tools/` that the server does not import is written-but-unregistered work
@@ -86,14 +103,17 @@ Then map each registered tool to the spec operations it exercises by reading
 the requests out of the tool modules:
 
 ```bash
-grep -n 'request_json\|request_text' src/fossa_mcp/tools/*.py
+grep -n -A2 'request_json\|request_text' src/fossa_mcp/tools/*.py
 ```
 
-Normalize the f-strings — `f"/projects/{encoded_locator}"` is the spec's
-`/projects/{locator}` — and expect one tool to map to **several** operations:
-`fossa_get_project` can issue up to four GETs (project, labels,
-release-groups, last-published) and `fossa_project_posture` is an aggregate by
-design. Credit every operation a tool touches. Also read the tool body far
+Keep the `-A2` context (or just read each module): calls wrap, and the method
+and path often sit on the line *after* the call, so single matched lines miss
+mappings. Normalize the f-strings — `f"/projects/{encoded_locator}"` is the
+spec's `/projects/{locator}` — and expect one tool to map to **several**
+operations: `fossa_project_posture` is an aggregate by design, and how many
+paths `fossa_get_project` touches has varied by branch — derive the mapping
+from the module, not from this file. Credit every operation a tool touches.
+Also read the tool body far
 enough to catch conditionals: a "list" tool may have a POST fallback branch.
 
 ## 3. Build the coverage matrix
@@ -119,6 +139,16 @@ codebase. `src/fossa_mcp/config.py` is the authority for every variable name
 shell variable does not mean the server has no token. Check config.py again
 each audit rather than trusting this paragraph.
 
+**No local token at all is a real state, not a dead end.** The repo ships only
+`.env.example`; a checkout can have no `.env` and nothing in the shell while
+the connected MCP server is a remote HTTP deployment holding its token
+server-side. In that case verify through the connected MCP tools, for the
+endpoint set the two surfaces share, and list the remainder as unverified with
+"no local credential" as the reason. Be precise about what transfers: a
+possibly-stale connected server proves **endpoint identity** — the same path
+answers — not the checkout's code behavior. Say which surface you used and its
+tool count.
+
 Get a real locator first — **never invent one**; a 404 on a fabricated
 locator proves nothing about the endpoint:
 
@@ -138,7 +168,7 @@ Then hit every path a registered read tool requests, recording status and
 latency:
 
 ```bash
-curl -s -o /tmp/resp.json -w '%{http_code} %{time_total}s\n' \
+curl -s -o "$TMPDIR/resp.json" -w '%{http_code} %{time_total}s\n' \
   -H "Authorization: Bearer $FOSSA_API_TOKEN" \
   "https://app.fossa.com/api/projects/<encoded-locator>"
 ```
@@ -165,7 +195,9 @@ declared `properties` for that operation. Three outcomes: fields match;
 `/projects/{locator}` case, where the 200 schema is a bare `{"type":
 "object"}` with an example but zero properties); fields declared but missing
 live (only this one is a potential server/API bug). When the schema is empty,
-the spec's `examples` block is the best available hint — use it, and label the
+the spec's `examples` block is the best available hint — it sits at the
+media-type level, beside the schema rather than inside it
+(`content` → `application/json` → `examples`) — use it, and label the
 comparison as example-based.
 
 ## 5. Prove the write gate without mutating anything
@@ -179,8 +211,15 @@ variables *removed*, not merely unset-looking:
 
 ```bash
 env -u FOSSA_ALLOW_WRITES -u FOSSA_ALLOW_DESTRUCTIVE -u FOSSA_ALLOW_ADMIN \
-  uv run pytest tests/test_policy_tools.py -q
+  uv run pytest tests/test_policy_tools.py tests/test_package_tools.py -q
 ```
+
+The refusal surface spans multiple files — `tests/test_policy_tools.py`
+covers the policy writes, `tests/test_package_tools.py` the package writes —
+and a new gated tool module brings its own refusal-test file with it, while a
+branch without the module lacks the file. Discover the current set with
+`grep -rl "call_count == 0" tests/` and run what the grep finds, not this
+list, whenever they differ.
 
 `pyproject.toml` sets `addopts = "-m 'not live'"`, so this run touches no
 network anywhere in the suite. If `src/fossa_mcp/writes.py` or the refusal
@@ -194,9 +233,17 @@ Verdict first, one block:
 
 - **X of Y documented operations covered** by registered tools (and X of the
   GET subset — the number that matches the server's read-first posture).
-- **X of Y registered read tools verified live**, with the failure list right
-  there, each with its status and diagnosis.
+- **X of Y read operations verified live** — operations, not tools, are the
+  verdict unit, since tools map many-to-one — with the failure list right
+  there, each with its diagnosis.
 - Write gate: held / not run / absent on this branch.
+
+Liveness takes three values, not two: verified directly, **verified
+transitively** (proven only through a composing tool's success — an endpoint
+exercised inside an aggregate like `fossa_project_posture` counts, labeled as
+such), and unverified-with-reason. And not every verification yields an HTTP
+status: curl gives statuses, MCP-tool calls give ok/exception — record the
+outcome the surface actually produces instead of inventing a status code.
 
 Then the matrix (counts, then the domain-grouped gap lists). Then **spec
 drift**, its own section: fields returned live but undocumented (per
@@ -215,20 +262,23 @@ earns its length from the gaps, not from restating success.
   turns every request into a 401 that looks like a bad token.
 - **A missing `spec/fossa-openapi.json` means the checkout is on a branch
   without the vendored spec, not that the spec is gone.** Read it from the
-  branch that has it — `git show api-parity:spec/fossa-openapi.json` — rather
-  than regenerating; `scripts/update_openapi.py` fetches today's live spec and
-  changes the source of truth mid-audit.
-- **The registered tool count is branch-dependent and changes weekly.** 9 on
-  the current working branch, 13 on `api-parity` (9 read + 4 policy from
-  `tools/policies.py`), with unimported modules sitting in `tools/`. This is
-  exactly why steps 1–2 derive everything from `server.py` at runtime;
-  hardcoding a tool list is how an audit reports last month.
-- **A read tool can issue POST.** `fossa_list_projects` falls back to
-  `POST /v2/projects` (documented) when the filter set outgrows the query
-  string. A method-only read/write split miscounts both columns.
-- **One tool is not one operation.** `fossa_get_project` touches up to four
-  paths, `fossa_project_posture` aggregates several. Mapping tools 1:1 to
-  operations undercounts coverage.
+  branch that has it — `git show api-parity:spec/fossa-openapi.json` — and
+  point `SPEC` at the copy, rather than regenerating;
+  `scripts/update_openapi.py` fetches today's live spec and changes the source
+  of truth mid-audit.
+- **The registered tool count is branch-dependent and changes weekly.** It has
+  differed across concurrently live branches, with unimported modules sitting
+  in `tools/`. This is exactly why steps 1–2 derive everything from
+  `server.py` at runtime; hardcoding a tool list — or a count — is how an
+  audit reports last month.
+- **A read tool can issue POST.** `POST /v2/projects` is documented as a read
+  — the filter set moves into the body — and whether a registered tool issues
+  it has varied by branch; derive it from the module. A method-only
+  read/write split miscounts both columns.
+- **One tool is not one operation.** `fossa_project_posture` aggregates
+  several requests by design, and the number of paths `fossa_get_project`
+  touches has varied by branch — derive the mapping from the module. Mapping
+  tools 1:1 to operations undercounts coverage.
 - **Empty response schemas are a spec property, not a finding against the
   server.** `GET /projects/{locator}` declares a property-less object; fields
   like `securityPolicyId` were confirmed from live calls, not the spec

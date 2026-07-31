@@ -25,14 +25,20 @@ All commands run from the repo root:
 `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp`
 — quote the path, it contains spaces.
 
-First confirm the baseline exists. `spec/fossa-openapi.json` is
-branch-dependent: it was added in commit `340518d` and lives on `api-parity`
-and `security-policy-writes`; on `block-package-tools` (checked 2026-07-31)
-`spec/` holds only a three-line README stub and there is no JSON at all. If the
-file is missing, there is no drift to measure — say so, and note that running
-the update script (step 2) establishes a baseline for next time.
+First confirm the baseline exists. What is tracked on the current branch is
+decided by `git ls-files spec/ API_PARITY_PLAN.md` and by nothing else — a
+per-branch inventory hardcoded into this file went stale the same day it was
+written. If `spec/fossa-openapi.json` is not in that output, there is no drift
+to measure — say so, and note that running the update script (step 2)
+establishes a baseline for next time.
+
+`$SCRATCHPAD` is not predefined — in a fresh shell the `cp` below would target
+`/spec-baseline.json` and fail. Set it to the session scratchpad directory if
+one is listed, otherwise `mktemp -d`, and since shell state does not persist
+between commands, use the same absolute path in every later step.
 
 ```bash
+SCRATCHPAD="${SCRATCHPAD:-$(mktemp -d)}"
 cp spec/fossa-openapi.json "$SCRATCHPAD/spec-baseline.json"
 python3 -c "
 import json
@@ -49,6 +55,11 @@ wrong number and the two are 80 apart.
 
 ## 2. Fetch the latest spec
 
+Record the pre-run state first — the whole tree, not just `spec/`:
+`git status --short`. Step 6 restores to this snapshot, and a `spec/`-scoped
+status would miss a stray `spec/` the script creates when run from the wrong
+directory.
+
 ```bash
 .venv/bin/python scripts/update_openapi.py
 ```
@@ -63,8 +74,16 @@ Facts about the script, from reading it:
   (retrieval timestamp, version, SHA-256). Both need restoring in step 6.
 - It needs `httpx`, which is a project dependency — use the project venv, not
   system python.
+- It calls `datetime.utcnow()` (line 57), which prints a `DeprecationWarning`
+  on stderr. Harmless noise, not a failure — the exit code is what matters.
 
 ## 3. Diff old vs new at the operation level
+
+When the two versions match, check byte identity before bothering with the
+diff: if step 2 left `git status --short spec/fossa-openapi.json` clean, the
+fetched spec is byte-identical to the baseline — zero drift, nothing to diff.
+(Equivalently, the SHA-256 the script wrote into `spec/README.md` equals the
+previously committed one.) Only a modified JSON needs the operation diff.
 
 Save this to `$SCRATCHPAD/spec_drift.py` and run
 `python3 "$SCRATCHPAD/spec_drift.py" "$SCRATCHPAD/spec-baseline.json" spec/fossa-openapi.json`:
@@ -125,11 +144,26 @@ grep -rnE '"(GET|PUT|POST|PATCH|DELETE) /' src/fossa_mcp/tools/
 ```
 
 `server.py` maps each `fossa_*` name to a function in `src/fossa_mcp/tools/`;
-each tool module carries its endpoint as a string literal (the `"endpoint"` key
-of its response envelope, or `_ENDPOINT` in `reports.py`). The 9 current read
-tools resolve to 8 spec paths — `fossa_project_posture` has no endpoint of its
-own, it composes the issues and dependencies calls in `posture.py`, so any flag
-on those endpoints applies to it too.
+most tool modules carry their endpoint as a string literal (the `"endpoint"`
+key of the response envelope, or `_ENDPOINT` in `reports.py`). The greps define
+the current surface — every count in the report comes from their output, not
+from a remembered number. Three caveats on the mapping:
+
+- `posture.py` passes method and path as **separate arguments** to
+  `request_json_with_status`, so the endpoint grep never sees it. Its three
+  endpoints (posture.py lines 50-51, 63, 74) are `GET /v2/issues/categories`,
+  `GET /v2/issues`, and `GET /v2/revisions/{locator}/dependencies` — the first
+  is a real spec path used by no other tool, so omitting posture silently
+  drops it from the drift check. Any flag on these applies to
+  `fossa_project_posture`.
+- `fossa_block_package` and `fossa_unblock_package` (`tools/packages.py`) sit
+  entirely on endpoints absent from the spec — captured from the FOSSA web
+  app's own traffic, per the module docstring. They cannot be drift-checked
+  here; report them as "not covered by the spec" (see the inferred-endpoint
+  trap).
+- `policies.py` line 119 carries one composite endpoint string —
+  `"GET /projects/{locator} + GET /organizations/{id}/settings/projects/issues/security"`
+  — two operations joined with ` + `; split it before mapping.
 
 Classify every diff line:
 
@@ -146,11 +180,13 @@ Classify every diff line:
 In this order: version bump (old → new) and operation counts; **breakage**;
 **action-required**; then opportunities; then the no-tool remainder as a count.
 If the lists are empty, "no drift affecting registered tools between X and Y"
-is the whole finding and is worth stating plainly.
+is the whole finding and is worth stating plainly — and when the two versions
+are equal, say "no drift at X", not "between X and X".
 
 Update the counts in `API_PARITY_PLAN.md` **only if the user asks** — the plan
 itself says to regenerate its numbers after an update run, but editing it is
-the user's call, and the file only exists on the parity branches.
+the user's call, and the file is branch-dependent (check the `git ls-files`
+output from step 1).
 
 ## 6. Restore the working tree
 
@@ -158,26 +194,28 @@ The update script has now modified the working tree. If the user wanted the
 drift report only — the default — put it back:
 
 ```bash
-git status --short spec/
+git status --short
 git checkout -- spec/fossa-openapi.json spec/README.md
 ```
 
-Run the `status` first and believe it: on a branch where the JSON was never
-tracked, `git checkout` cannot restore it — the fetched file simply stays
-untracked, and the honest move is to tell the user it is there and let them
-keep or delete it. `spec/README.md` is tracked on every branch and always needs
-the checkout, because the script rewrote it.
+Run the `status` first — full tree, compared against the snapshot from step 2
+— and believe it: on a branch where the JSON was never tracked, `git checkout`
+cannot restore it — the fetched file simply stays untracked, and the honest
+move is to tell the user it is there and let them keep or delete it. If
+`spec/README.md` is tracked (the step 1 `git ls-files` output says), it always
+needs the checkout, because the script rewrote it.
 
 Committing the new spec is a separate decision the user makes. Do not stage it,
 do not commit it, and do not fold it into an unrelated commit.
 
 ## Traps
 
-- **The baseline is branch-dependent.** `spec/fossa-openapi.json` and
-  `API_PARITY_PLAN.md` exist on `api-parity` and `security-policy-writes` but
-  not on `main` or `block-package-tools` (verified 2026-07-31). Check
-  `git ls-files spec/` before promising a diff; on the wrong branch the "old
-  spec" you are diffing against may be one you just fetched.
+- **The baseline is branch-dependent.** Run
+  `git ls-files spec/ API_PARITY_PLAN.md` before promising a diff and treat its
+  output as the only authority on what exists — a hardcoded per-branch
+  inventory here went stale within a day of being written. On a branch without
+  the tracked JSON, the "old spec" you are diffing against may be one you just
+  fetched.
 - **The script overwrites `spec/README.md` too.** Restoring only the JSON
   leaves a modified README with a new timestamp and SHA in the tree — a
   confusing half-restore that looks like someone re-vendored without the spec.
@@ -187,10 +225,10 @@ do not commit it, and do not fold it into an unrelated commit.
   count that skips the method-set filter also miscounts, because path items can
   carry non-method keys.
 - **Absent from both specs is not the same as safe.** FOSSA has real endpoints
-  the spec never documented — `docs/ENDPOINT_INFERENCE.md` reconstructs one for
-  package blocking. A tool built on an inferred endpoint cannot be drift-checked
-  here; list any such tool as "not covered by the spec" instead of silently
-  skipping it.
+  the spec never documented — `docs/ENDPOINT_INFERENCE.md` reconstructs the
+  ones behind `fossa_block_package` and `fossa_unblock_package`. A tool built
+  on an inferred endpoint cannot be drift-checked here; list any such tool as
+  "not covered by the spec" instead of silently skipping it.
 - **"Changed" per the script is necessary, not sufficient, for action.** It
   flags any byte-level difference inside parameters/requestBody/responses,
   including reworded descriptions. Read the flagged operation before declaring

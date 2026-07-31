@@ -48,6 +48,13 @@ Never guess a locator from a repo name. The listing gives you the exact
 the user wants a specific revision rather than the latest, resolve it with
 `fossa_list_project_revisions(project_locator=...)`.
 
+When the target is a criterion rather than a name — "the project with the
+most vulnerability findings" — sort the listing instead of sampling:
+`fossa_list_projects(sort="issues-security_desc")`. Mind the naming mismatch:
+project listings call this category `security` (the `issues.security` count,
+sort key `issues-security_desc`) while the issue endpoints call the same
+category `vulnerability`.
+
 Keep the **full** revision locator (`project$revision`). The dependency
 endpoints take it verbatim as a path parameter; the issue endpoints accept
 either form. Passing a bare revision id to `fossa_list_dependencies` is a 404.
@@ -97,10 +104,15 @@ with a prominent caveat — never export partial data silently.
 ## 3. Join each finding to its dependency
 
 Each vulnerability issue names the affected package as a FOSSA dependency
-locator (`fetcher+package$version`, e.g. `npm+lodash$4.17.20`) — in the v2
-issue payload this is the issue's `revisionId`. Verify the field name against
-the first live response rather than trusting this note, then join on the
-locator string.
+locator (`fetcher+package$version`, e.g. `npm+lodash$4.17.20`) — where it
+lives depends on the payload. In posture's `top_vulnerability_issues` (and
+`fossa_list_issues` records) it is the issue's `source.id`; the `revisionId`
+visible there sits under `projects[]` and is the **project's** revision, not
+the dependency's — joining on it silently mismatches every finding. The field
+is named `revisionId` only in the nested issues of
+`direct_dependencies_with_issues` / `fossa_list_dependencies` records. Verify
+against the first live response rather than trusting this note, then join on
+the locator string.
 
 Pull the dependency records for the revision:
 
@@ -159,6 +171,7 @@ as purls. The file is a JSON array of OSV entries. Skeleton:
 {
   "schema_version": "1.6.0",
   "id": "CVE-2021-23337",
+  "modified": "2026-07-31T17:00:00Z",
   "aliases": ["GHSA-35jh-r3h4-6jhm"],
   "summary": "Command injection in lodash",
   "affected": [
@@ -171,17 +184,27 @@ as purls. The file is a JSON array of OSV entries. Skeleton:
   "database_specific": {
     "fossa": {"cvss": 7.2, "severity": "high",
               "epss_score": 0.00205, "epss_percentile": 0.62,
-              "remediation": "upgrade to 4.17.21"}
+              "remediation": {"partialFix": "4.17.21", "partialFixDistance": "PATCH",
+                              "completeFix": "4.17.21", "completeFixDistance": "PATCH"},
+              "modified_is": "export-timestamp"}
   }
 }
 ```
 
 - The same CVE in two packages is **one** entry with two `affected` items,
   not two entries.
+- **OSV requires `modified`.** FOSSA has no per-advisory modified date, so
+  set it to the export timestamp (or the revision's `analyzedAt` if you
+  prefer scan time) and label which one it is
+  (`database_specific.fossa.modified_is`) — an entry without `modified` fails
+  schema validation.
 - OSV's `severity` field requires a CVSS **vector string**. FOSSA returns a
   numeric base score; do not fabricate a vector from it. Omit `severity` and
   carry the numeric score in `database_specific.fossa.cvss` unless the issue
-  detail actually contains a vector.
+  carries a `cvssVector` — it usually does, and then the `type` must be
+  derived from the vector prefix (`CVSS:4.0` → `CVSS_V4`, `CVSS:3.x` →
+  `CVSS_V3`), never hardcoded: FOSSA emits CVSS:4.0 vectors routinely, and
+  typing them `CVSS_V3` is schema-invalid.
 - Everything FOSSA-specific (EPSS, depth, remediation distance, issue id)
   goes under `database_specific.fossa` so the entry stays valid OSV and
   nothing FOSSA said is lost.
@@ -204,10 +227,18 @@ Write the document to a local file the user can diff and ship:
 directory unless the user names another. For multi-project exports, one file
 per project; a merged file hides which project a finding came from.
 
-Validate before reporting: the file parses, every entry has an id, every
-affected package has a purl, and the entry count reconciles with
-`issue_counts.vulnerability` (state the arithmetic — N issues → M entries
-after grouping by CVE — so the user can check it).
+The JSON **array** of OSV entries is a local convention chosen because one
+file diffs — it is not standard OSV interchange. The OSV ecosystem is one
+entry per file, and osv-scanner will not ingest an array. If the export is
+destined for OSV tooling rather than this skill's diff, offer one
+`<id>.json` file per entry instead.
+
+Validate before reporting: the file parses, every entry has an `id` **and a
+`modified` timestamp**, every `severity[]` type matches its vector's prefix,
+every `ranges[]` entry has an `introduced` event, every affected package has
+a purl, and the entry count reconciles with `issue_counts.vulnerability`
+(state the arithmetic — N issues → M entries after grouping by CVE — so the
+user can check it).
 
 ## 6. Vendor diff — normalize both sides
 
@@ -243,7 +274,9 @@ Then compute four sets: **both agree** (key present on both sides),
 both sides but a different severity band or a CVSS base-score gap ≥ 1.0.
 Check the CVSS *version* before calling it a disagreement: a v2 score against
 a v3.1 score is a methodology difference, not a dispute about the
-vulnerability.
+vulnerability — and the case you will actually hit today is v4-vs-v3.x, since
+FOSSA routinely carries CVSS:4.0 vectors while most vendors still report
+v3.1.
 
 ## 7. Vendor diff — report
 
@@ -256,7 +289,9 @@ order:
 2. **Severity disagreements**: key, FOSSA score/band, vendor score/band,
    CVSS versions, delta.
 3. **FOSSA-only**, each row spot-checked: read the advisory (or at minimum
-   the CVE's affected-version range) and mark the row *confirmed* (the
+   the CVE's affected-version range) — the **upstream** advisory, not FOSSA's
+   own `affectedVersionRanges`, which is FOSSA's claim restated and makes the
+   check circular — and mark the row *confirmed* (the
    installed version is in the affected range), *version-range disagreement*
    (vendor saw the package but considers the version unaffected), or
    *unverified*. **Never present an unverified FOSSA-only row to a customer
@@ -308,7 +343,8 @@ than improvising a ranking here.
   keep their `v` prefix (most vendors emit it; stripping it breaks nothing
   in mode 1 and breaks joins in mode 2 if done on only one side).
 - **Do not fabricate CVSS vectors.** OSV's `severity` wants a vector string;
-  FOSSA supplies a numeric score. A back-constructed vector looks
+  use FOSSA's `cvssVector` when present (typed by its prefix, per step 5) and
+  omit `severity` when it is not. A back-constructed vector looks
   authoritative and is fiction.
 - **`analysis_state: "in_progress"` means the numbers are not final.** Both
   posture and the issues list can return it (HTTP 202 upstream). Never diff
