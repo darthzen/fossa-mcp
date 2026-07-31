@@ -39,7 +39,9 @@ What FOSSA's API actually supports, which is what shapes these tools:
   "Write tiers"; DECISIONS.md §7).
 * Most of these writes document no 2xx response at all, and
   `PUT /settings/integrations/custom-license-scans` documents a `204`. Every
-  call here goes through `_request_tolerating_empty_body` for that reason.
+  call here goes through `client.request_json_optional` for that reason. Two
+  sections and all ten propagate endpoints also send a bare top-level JSON
+  array rather than an object, which the client's `JsonBody` covers.
 
 Undocumented integer scales such as
 `projectDefaultStatusCheckFilterVulnerability` are carried through verbatim and
@@ -49,13 +51,13 @@ through unchanged, because that is a gap in the vendored spec rather than an
 unexpected response.
 """
 
-from typing import Any, cast
+from typing import Any
 
 from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
-from ..errors import FossaApiError, FossaConfigurationError
+from ..errors import FossaConfigurationError
 from ..models.org_settings import (
     ORG_LIMIT_PATHS,
     ORG_SETTINGS_DELETE_PATHS,
@@ -97,41 +99,6 @@ def _org_id(settings: Settings) -> int:
             "id shown in your FOSSA URL."
         )
     return settings.fossa_org_id
-
-
-async def _request_tolerating_empty_body(
-    client: FossaClient,
-    method: str,
-    path: str,
-    *,
-    json_body: dict[str, Any] | list[Any] | None = None,
-) -> dict[str, Any] | list[Any] | None:
-    """Call FOSSA where a successful response may carry no body, or an array one.
-
-    Two client limitations meet here, and neither is worth changing `client.py`
-    for from inside one domain:
-
-    * `request_json` parses every 2xx and reports an unparseable body as a
-      `FossaApiError` regardless of status. Most writes in this domain document
-      no 2xx body at all and the custom-license-scans `PUT` documents a `204`,
-      so a 2xx that fails to parse is translated back into a success with no
-      data. Same treatment as `tools/issues.py`.
-    * `json_body` is annotated `dict[str, Any] | None`, but two sections take a
-      bare JSON array and all ten propagate endpoints take an array of field
-      names. The runtime contract is wider than the annotation — it is handed
-      straight to `httpx`'s `json=` — so the array is cast at this single call
-      site. Widening `json_body` to `dict[str, Any] | list[Any] | None` in
-      `client.py` would remove the need for the cast.
-    """
-    try:
-        _, body = await client.request_json_with_status(
-            method, path, json_body=cast(dict[str, Any] | None, json_body)
-        )
-    except FossaApiError as exc:
-        if 200 <= exc.status_code < 300:
-            return None
-        raise
-    return body
 
 
 def _required_tiers(
@@ -312,8 +279,8 @@ async def update_org_settings(
         method = "PUT"
         payload = validated.values if validated.values is not None else list(validated.items or [])
 
-    result = await _request_tolerating_empty_body(
-        client, method, f"/organizations/{org_id}{suffix}", json_body=payload
+    result = await client.request_json_optional(
+        method, f"/organizations/{org_id}{suffix}", json_body=payload
     )
 
     return {
@@ -356,9 +323,7 @@ async def delete_org_setting(
     org_id = _org_id(settings)
     suffix = ORG_SETTINGS_DELETE_PATHS[validated.target]
 
-    result = await _request_tolerating_empty_body(
-        client, "DELETE", f"/organizations/{org_id}{suffix}"
-    )
+    result = await client.request_json_optional("DELETE", f"/organizations/{org_id}{suffix}")
 
     return {
         "ok": True,

@@ -25,8 +25,10 @@ Four things about this module are load-bearing:
 * **Two endpoints do not answer the way `request_json` expects.**
   `POST /components/build` documents a `201` with no body at all, and
   `GET /services/github-app/installation-url` documents only a `302` whose
-  payload is the `Location` header. Both are handled here rather than by
-  changing `client.py`; both are spec gaps worth reporting upstream.
+  payload is the `Location` header. Both are spec gaps worth reporting upstream.
+  Neither is worked around here: they go through `client.request_json_optional`
+  and `client.request_redirect_location`, which is where transport behavior
+  belongs.
 """
 
 from collections.abc import Sequence
@@ -38,7 +40,6 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
-from ..errors import FossaApiError
 from ..models import Severity
 from ..models.inventory import (
     AuditLogExportInput,
@@ -117,34 +118,6 @@ def _add_plain_repeated(
     """Repeat a query key with no bracket suffix (OpenAPI `style: form`)."""
     for value in values or []:
         params.append((key, value))
-
-
-async def _request_tolerating_empty_body(
-    client: FossaClient,
-    method: str,
-    path: str,
-    *,
-    params: list[tuple[str, str]] | None = None,
-    json_body: dict[str, Any] | None = None,
-) -> dict[str, Any] | list[Any] | None:
-    """Call FOSSA where a successful response may carry no body.
-
-    `POST /components/build` documents its `201` as bare "Created" with no
-    content at all. `request_json` calls `.json()` on every 2xx and reports the
-    failure as a `FossaApiError` regardless of status, so translate that back
-    into a success with no data when the status was in the 2xx range. Anything
-    else propagates unchanged. This mirrors the helper of the same name in
-    `tools/issues.py`; both exist because `client.py` has no bodyless-2xx path.
-    """
-    try:
-        _, body = await client.request_json_with_status(
-            method, path, params=params, json_body=json_body
-        )
-    except FossaApiError as exc:
-        if 200 <= exc.status_code < 300:
-            return None
-        raise
-    return body
 
 
 # --- binary decomposition ----------------------------------------------------
@@ -660,8 +633,8 @@ async def build_component(
     body = validated.to_body()
 
     # The documented 201 is bare "Created" with no content schema.
-    result = await _request_tolerating_empty_body(
-        client, "POST", "/components/build", params=params, json_body=body
+    result = await client.request_json_optional(
+        "POST", "/components/build", params=params, json_body=body
     )
 
     return {
@@ -1115,30 +1088,21 @@ async def get_github_app_installation_url(ctx: Context) -> dict[str, Any]:
     Read-only, and it installs nothing: the returned URL has to be opened by a
     human with GitHub admin rights on the target organization. 404 means the
     GitHub App is not configured for this FOSSA instance.
+
+    The URL is returned, not followed. Verified live, it is a constant public
+    GitHub App installation URL with no `state`, `code`, or nonce, so it is safe
+    to show and reuse; following it would only fetch a GitHub HTML page.
     """
     client: FossaClient = ctx.request_context.lifespan_context["client"]
 
     # The spec documents no 2xx for this endpoint at all — the whole payload is
-    # the Location header of a 302, which `request_json` and `request_text` both
-    # reject as an error status before the header can be read. Take the raw
-    # response instead rather than reshaping the client for one endpoint.
-    response = await client._request("GET", "/services/github-app/installation-url")
+    # the Location header of a 302.
+    status_code, location = await client.request_redirect_location(
+        "GET", "/services/github-app/installation-url"
+    )
 
-    if response.status_code in (301, 302, 303, 307, 308):
-        return {
-            "ok": True,
-            "endpoint": "GET /services/github-app/installation-url",
-            "data": {
-                "installation_url": response.headers.get("location"),
-                "status_code": response.status_code,
-            },
-        }
-
-    if 200 <= response.status_code < 300:
-        return {
-            "ok": True,
-            "endpoint": "GET /services/github-app/installation-url",
-            "data": {"installation_url": None, "status_code": response.status_code},
-        }
-
-    raise FossaClient._build_error(response, "GET", "/services/github-app/installation-url")
+    return {
+        "ok": True,
+        "endpoint": "GET /services/github-app/installation-url",
+        "data": {"installation_url": location, "status_code": status_code},
+    }

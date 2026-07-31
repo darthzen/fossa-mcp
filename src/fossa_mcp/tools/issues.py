@@ -25,7 +25,6 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
-from ..errors import FossaApiError
 from ..models import (
     ChangeStatus,
     IssueCategory,
@@ -290,33 +289,6 @@ def _add_plain_repeated(
     """Repeat a query key without the `[]` suffix, which `teamId` needs."""
     for value in values or []:
         params.append((key, value))
-
-
-async def _request_tolerating_empty_body(
-    client: FossaClient,
-    method: str,
-    path: str,
-    *,
-    params: list[tuple[str, str]] | None = None,
-    json_body: dict[str, Any] | None = None,
-) -> dict[str, Any] | list[Any] | None:
-    """Call FOSSA where a successful response may carry no body.
-
-    `PUT /v2/issues/exceptions/{id}` answers `204`, and `DELETE
-    /issue-filters/{id}` documents a `200` with no content. `request_json`
-    reports an unparseable body as a `FossaApiError` regardless of status, so
-    translate that back into a success with no data when the status was in the
-    2xx range. Anything else propagates unchanged.
-    """
-    try:
-        _, body = await client.request_json_with_status(
-            method, path, params=params, json_body=json_body
-        )
-    except FossaApiError as exc:
-        if 200 <= exc.status_code < 300:
-            return None
-        raise
-    return body
 
 
 # --- issue reads -------------------------------------------------------------
@@ -856,8 +828,9 @@ async def extend_issue_exception(
     }
 
     # A successful update answers 204 with no body.
-    result = await _request_tolerating_empty_body(
-        client, "PUT", f"/v2/issues/exceptions/{validated.exception_id}", json_body=body
+    # `PUT /v2/issues/exceptions/{id}` answers 204 with no body.
+    result = await client.request_json_optional(
+        "PUT", f"/v2/issues/exceptions/{validated.exception_id}", json_body=body
     )
 
     return {
@@ -1186,9 +1159,8 @@ async def delete_issue_filter(
     require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_issue_filter")
 
     # The 200 here is documented without a response body.
-    result = await _request_tolerating_empty_body(
-        client, "DELETE", f"/issue-filters/{validated.filter_id}"
-    )
+    # `DELETE /issue-filters/{id}` documents a 200 with no content.
+    result = await client.request_json_optional("DELETE", f"/issue-filters/{validated.filter_id}")
 
     return {
         "ok": True,

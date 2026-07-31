@@ -36,7 +36,6 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
-from ..errors import FossaApiError
 from ..models.integrations import (
     REPORT_OPTION_DEPENDENCY_FIELDS,
     REPORT_OPTION_SECTIONS,
@@ -74,38 +73,6 @@ from ..query import split_revision_locator
 from ..writes import WriteTier, require_tier
 
 # --- shared helpers ----------------------------------------------------------
-
-
-async def _request_tolerating_empty_body(
-    client: FossaClient,
-    method: str,
-    path: str,
-    *,
-    params: list[tuple[str, str]] | None = None,
-    json_body: dict[str, Any] | None = None,
-) -> dict[str, Any] | list[Any] | None:
-    """Call FOSSA where a successful response may carry no body.
-
-    Four operations in this module answer `204`: the Jira patch, both snippet
-    rejection endpoints, and the report option and custom risk score deletes.
-    `request_json` reports an unparseable body as a `FossaApiError` regardless
-    of status, so translate that back into a success with no data when the
-    status was 2xx.
-
-    This duplicates the helper in `tools/issues.py` deliberately. The real fix
-    is in `client.py`, which should not call `.json()` on an empty 2xx body at
-    all; that is a change to shared transport code and is left for a pass that
-    owns it rather than made from a domain module.
-    """
-    try:
-        _, body = await client.request_json_with_status(
-            method, path, params=params, json_body=json_body
-        )
-    except FossaApiError as exc:
-        if 200 <= exc.status_code < 300:
-            return None
-        raise
-    return body
 
 
 def _revision_path_locator(project_locator: str, revision_locator: str) -> tuple[str, str]:
@@ -321,12 +288,12 @@ async def save_jira_configuration(
 
     if validated.jira_id is None:
         endpoint = "POST /jira"
-        result = await _request_tolerating_empty_body(client, "POST", "/jira", json_body=payload)
+        result = await client.request_json_optional("POST", "/jira", json_body=payload)
     else:
         endpoint = "PATCH /jira/{id}"
         # A successful patch answers 204 with no body.
-        result = await _request_tolerating_empty_body(
-            client, "PATCH", f"/jira/{validated.jira_id}", json_body=payload
+        result = await client.request_json_optional(
+            "PATCH", f"/jira/{validated.jira_id}", json_body=payload
         )
 
     return {
@@ -359,7 +326,7 @@ async def delete_jira_configuration(ctx: Context, jira_id: int) -> dict[str, Any
 
     require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_jira_configuration")
 
-    result = await _request_tolerating_empty_body(client, "DELETE", f"/jira/{validated.jira_id}")
+    result = await client.request_json_optional("DELETE", f"/jira/{validated.jira_id}")
 
     # FOSSA answers 200 with `{"id": ..., "deleted": false}` when the delete did
     # not happen, so report its own verdict rather than assuming success.
@@ -702,8 +669,8 @@ async def delete_report_option(ctx: Context, report_option_id: int) -> dict[str,
     require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_report_option")
 
     # 204 with no body.
-    result = await _request_tolerating_empty_body(
-        client, "DELETE", f"/report-options/{validated.report_option_id}"
+    result = await client.request_json_optional(
+        "DELETE", f"/report-options/{validated.report_option_id}"
     )
 
     return {
@@ -816,8 +783,8 @@ async def delete_custom_risk_score(
 
     params = _risk_score_scope_params(validated.scope_type, validated.scope_id)
     # 204 with no body.
-    result = await _request_tolerating_empty_body(
-        client, "DELETE", f"/custom-risk-scores/{validated.issue_id}", params=params
+    result = await client.request_json_optional(
+        "DELETE", f"/custom-risk-scores/{validated.issue_id}", params=params
     )
 
     return {
@@ -1105,8 +1072,7 @@ async def set_snippet_rejection(
         payload["vendoredMatch"] = list(validated.vendored_match)
 
     # 204 with no body.
-    result = await _request_tolerating_empty_body(
-        client,
+    result = await client.request_json_optional(
         "POST",
         f"/revisions/{encoded_locator}/snippets/{action}",
         json_body=payload,

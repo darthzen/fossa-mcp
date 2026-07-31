@@ -1,4 +1,7 @@
-"""Tests for the FOSSA HTTP client: auth, encoding, errors, and retries."""
+"""Tests for the FOSSA HTTP client: auth, encoding, errors, retries, and the
+response shapes FOSSA answers with that a plain `.json()` cannot express."""
+
+import json
 
 import httpx
 import pytest
@@ -233,3 +236,160 @@ async def test_does_not_retry_non_retryable_status_codes(settings, respx_mock, s
     await client.aclose()
 
     assert route.call_count == 1
+
+
+# --- bodyless 2xx, array bodies, scalars, and redirects ----------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(204),
+        httpx.Response(200, content=b""),
+        httpx.Response(200, content=b"   \n"),
+        httpx.Response(201, content=b""),
+    ],
+)
+async def test_request_json_optional_returns_none_for_an_empty_2xx(settings, respx_mock, response):
+    """A successful request that carries no body is a success, not an error.
+
+    `request_json` calls `.json()` on every 2xx and reports the parse failure as
+    a `FossaApiError`, which is why five domain modules had each grown a private
+    helper that caught that error and re-inspected its status code.
+    """
+    respx_mock.delete("https://app.fossa.com/api/teams/7").mock(return_value=response)
+    client = FossaClient(settings)
+    body = await client.request_json_optional("DELETE", "/teams/7")
+    await client.aclose()
+
+    assert body is None
+
+
+@pytest.mark.asyncio
+async def test_request_json_optional_returns_a_parsed_2xx_body(settings, respx_mock):
+    respx_mock.delete("https://app.fossa.com/api/jira/3").mock(
+        return_value=httpx.Response(200, json={"id": 3, "deleted": False})
+    )
+    client = FossaClient(settings)
+    body = await client.request_json_optional("DELETE", "/jira/3")
+    await client.aclose()
+
+    assert body == {"id": 3, "deleted": False}
+
+
+@pytest.mark.asyncio
+async def test_request_json_optional_still_rejects_a_non_empty_invalid_body(settings, respx_mock):
+    """Empty is not the same as unparseable, and the two must not be conflated.
+
+    The helpers this method replaced mapped *any* unparseable 2xx to `None`, so
+    an HTML error page served with a 200 would have read as a clean success.
+    """
+    respx_mock.delete("https://app.fossa.com/api/teams/7").mock(
+        return_value=httpx.Response(200, content=b"<html>gateway</html>")
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json_optional("DELETE", "/teams/7")
+    await client.aclose()
+
+    assert excinfo.value.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_request_json_optional_propagates_an_error_status(settings, respx_mock):
+    respx_mock.delete("https://app.fossa.com/api/teams/7").mock(
+        return_value=httpx.Response(403, json={"message": "nope", "name": "ForbiddenError"})
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_json_optional("DELETE", "/teams/7")
+    await client.aclose()
+
+    assert excinfo.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_a_bare_array_is_a_valid_request_body(settings, respx_mock):
+    """Several endpoints take a top-level JSON array, not an object.
+
+    The organization-settings propagate endpoints take an array of field names
+    and two settings sections take an array outright. `httpx` always handled
+    this — only the `json_body` annotation was too narrow, which is what pushed
+    `tools/org_settings.py` into casting at the call site.
+    """
+    route = respx_mock.patch(
+        "https://app.fossa.com/api/organizations/1/settings/projects/issues/security"
+    ).mock(return_value=httpx.Response(204))
+    client = FossaClient(settings)
+    body = await client.request_json_optional(
+        "PATCH",
+        "/organizations/1/settings/projects/issues/security",
+        json_body=["projectDefaultSecurityStatusCheckEnabled"],
+    )
+    await client.aclose()
+
+    assert body is None
+    assert json.loads(route.calls.last.request.content) == [
+        "projectDefaultSecurityStatusCheckEnabled"
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("payload", [1, 0, "2026-07-30T12:00:00Z", True])
+async def test_request_json_returns_non_object_json_unchanged(settings, respx_mock, payload):
+    """`GET /counts/builds` answers with a bare JSON number.
+
+    Verified live: `?projectId=<locator>` returns the single byte `1`. Other
+    endpoints answer with a bare string (`last-published`). The old
+    `dict | list` return annotation was simply untrue.
+    """
+    respx_mock.get("https://app.fossa.com/api/counts/builds").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    client = FossaClient(settings)
+    result = await client.request_json("GET", "/counts/builds")
+    await client.aclose()
+
+    assert result == payload
+
+
+@pytest.mark.asyncio
+async def test_request_redirect_location_returns_the_target_without_following_it(
+    settings, respx_mock
+):
+    """The whole payload of the GitHub App endpoint is its `Location` header.
+
+    Verified live: two consecutive calls returned the same constant target with
+    an empty body and no `state`, `code`, or nonce on it. Following it would
+    fetch a GitHub HTML page no client can use, so the redirect is read, not
+    chased.
+    """
+    target = "https://github.com/apps/fossa-integration/installations/new"
+    route = respx_mock.get("https://app.fossa.com/api/services/github-app/installation-url").mock(
+        return_value=httpx.Response(302, headers={"location": target})
+    )
+    github = respx_mock.get(target).mock(return_value=httpx.Response(200, html="<html></html>"))
+
+    client = FossaClient(settings)
+    status_code, location = await client.request_redirect_location(
+        "GET", "/services/github-app/installation-url"
+    )
+    await client.aclose()
+
+    assert (status_code, location) == (302, target)
+    assert route.call_count == 1
+    assert not github.called
+
+
+@pytest.mark.asyncio
+async def test_request_redirect_location_raises_on_an_error_status(settings, respx_mock):
+    respx_mock.get("https://app.fossa.com/api/services/github-app/installation-url").mock(
+        return_value=httpx.Response(404, json={"message": "not configured"})
+    )
+    client = FossaClient(settings)
+    with pytest.raises(FossaApiError) as excinfo:
+        await client.request_redirect_location("GET", "/services/github-app/installation-url")
+    await client.aclose()
+
+    assert excinfo.value.status_code == 404

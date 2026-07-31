@@ -46,7 +46,7 @@ from typing import Any
 
 from mcp.server.fastmcp import Context
 
-from ..client import FossaClient
+from ..client import FossaClient, JsonValue
 from ..config import Settings
 from ..models.identity import (
     OidcProviderCreateInput,
@@ -571,7 +571,7 @@ async def exchange_oidc_token(
     }
 
 
-def _redact_exchange_result(result: dict[str, Any] | list[Any]) -> dict[str, Any]:
+def _redact_exchange_result(result: JsonValue) -> dict[str, Any]:
     """Strip the minted FOSSA API token out of a token-exchange response.
 
     Allow-list, not deny-list. Only the fields FOSSA documents beside the

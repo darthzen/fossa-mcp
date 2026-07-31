@@ -44,8 +44,8 @@ Two API-shape notes that affect the code rather than the caller:
   `DELETE /teams/groups/{id}`, and `DELETE /roles/{id}` document a `200` with no
   content, and `DELETE /teams/groups/{id}/teams/{teamId}` a `204`.
   `client.request_json` calls `.json()` on every 2xx and so reports an empty body
-  as an error; `_request_tolerating_empty_body` translates that back into a
-  success, the same workaround `tools/issues.py` uses.
+  as an error; `client.request_json_optional` is the method that expresses a
+  bodyless success and returns `None` for it.
 * **`DELETE /teams/{id}/release-groups` carries a JSON request body**, which is
   unusual for a delete and is why it does not go through `request_text` like the
   body-less ones.
@@ -57,7 +57,6 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
-from ..errors import FossaApiError
 from ..models.teams import (
     AddableTeamTarget,
     AddableTeamTargetsInput,
@@ -112,31 +111,6 @@ _ROLE_SECTION_PATH: dict[str, str] = {
     "permissions": "/roles/all-permissions",
     "assignable": "/roles/assignable",
 }
-
-
-async def _request_tolerating_empty_body(
-    client: FossaClient,
-    method: str,
-    path: str,
-    *,
-    json_body: dict[str, Any] | None = None,
-) -> dict[str, Any] | list[Any] | None:
-    """Call FOSSA where a successful response may carry no body.
-
-    Every delete in this domain answers with an empty body — a `204` for
-    `DELETE /teams/groups/{id}/teams/{teamId}` and a documented content-free
-    `200` for the rest. `request_json` reports an unparseable body as a
-    `FossaApiError` regardless of status, so translate that back into a success
-    with no data when the status was in the 2xx range. Anything else propagates
-    unchanged.
-    """
-    try:
-        _, body = await client.request_json_with_status(method, path, json_body=json_body)
-    except FossaApiError as exc:
-        if 200 <= exc.status_code < 300:
-            return None
-        raise
-    return body
 
 
 def _page_params(page: int, page_size: int, search: str | None) -> list[tuple[str, str]]:
@@ -425,7 +399,7 @@ async def delete_team(
     require_tier(settings, WriteTier.ADMIN, "fossa_delete_team")
     require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_team")
 
-    await _request_tolerating_empty_body(client, "DELETE", f"/teams/{validated.team_id}")
+    await client.request_json_optional("DELETE", f"/teams/{validated.team_id}")
 
     return {
         "ok": True,
@@ -529,8 +503,8 @@ async def update_team_assignments(
         endpoint = f"{method} /teams/{{id}}/release-groups"
         # The remove side is the one delete in this domain that carries a
         # request body, so it cannot go through the body-less text path.
-        body = await _request_tolerating_empty_body(
-            client, method, f"/teams/{validated.team_id}/release-groups", json_body=payload
+        body = await client.request_json_optional(
+            method, f"/teams/{validated.team_id}/release-groups", json_body=payload
         )
         result = body if body is not None else {}
 
@@ -618,9 +592,7 @@ async def manage_team_group(
         require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_manage_team_group(action='delete')")
 
     if validated.action == "delete":
-        await _request_tolerating_empty_body(
-            client, "DELETE", f"/teams/groups/{validated.team_group_id}"
-        )
+        await client.request_json_optional("DELETE", f"/teams/groups/{validated.team_group_id}")
         return {
             "ok": True,
             "endpoint": "DELETE /teams/groups/{id}",
@@ -729,8 +701,8 @@ async def update_team_group_assignments(
 
     removed: list[int] = []
     for team_id in target_ids:
-        await _request_tolerating_empty_body(
-            client, "DELETE", f"/teams/groups/{validated.team_group_id}/teams/{team_id}"
+        await client.request_json_optional(
+            "DELETE", f"/teams/groups/{validated.team_group_id}/teams/{team_id}"
         )
         removed.append(team_id)
 
@@ -832,7 +804,7 @@ async def manage_role(
         require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_manage_role(action='delete')")
 
     if validated.action == "delete":
-        await _request_tolerating_empty_body(client, "DELETE", f"/roles/{validated.role_id}")
+        await client.request_json_optional("DELETE", f"/roles/{validated.role_id}")
         return {
             "ok": True,
             "endpoint": "DELETE /roles/{id}",

@@ -14,6 +14,7 @@ from .errors import FossaApiError
 logger = logging.getLogger(__name__)
 
 _RETRYABLE_STATUS_CODES = {502, 503, 504}
+_REDIRECT_STATUS_CODES = {301, 302, 303, 307, 308}
 _MAX_RETRIES = 2
 _BACKOFF_SECONDS = (0.25, 0.75)
 _MAX_RETRY_AFTER_SECONDS = 10.0
@@ -25,6 +26,19 @@ _MAX_RETRY_AFTER_SECONDS = 10.0
 # an edit. GET is read-only; PUT and DELETE assign or remove a named resource,
 # so a replay converges on the same state.
 _IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "PUT", "DELETE"})
+
+# What FOSSA accepts as a request body. Most endpoints take a JSON object, but
+# several take a bare top-level array: the organization-settings propagate
+# endpoints take an array of field names, two settings sections take an array
+# outright, and `DELETE /package-labels` takes one under a key. `httpx` has
+# always handled both; only the annotation was narrow.
+JsonBody = dict[str, Any] | list[Any] | None
+
+# What FOSSA returns. Not every 2xx body is an object or an array —
+# `GET /counts/builds` answers with a bare JSON number and
+# `GET /projects/{locator}/last-published` with a bare JSON string — so a
+# narrower annotation here would be a claim the API does not honor.
+JsonValue = dict[str, Any] | list[Any] | str | int | float | bool | None
 
 
 class FossaClient:
@@ -66,10 +80,14 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
-        json_body: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | list[Any]:
+        json_body: JsonBody = None,
+    ) -> JsonValue:
         """
         Make an HTTP request and return the parsed JSON response.
+
+        Use this only where FOSSA always answers with a body. An endpoint that
+        may answer `204`, or `200` with no content, belongs on
+        `request_json_optional`.
 
         Raises:
             FossaApiError: If the API returns an error or an invalid JSON body.
@@ -85,8 +103,8 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
-        json_body: dict[str, Any] | None = None,
-    ) -> tuple[int, dict[str, Any] | list[Any]]:
+        json_body: JsonBody = None,
+    ) -> tuple[int, JsonValue]:
         """
         Make an HTTP request and return `(status_code, parsed_json)`.
 
@@ -112,13 +130,93 @@ class FossaClient:
 
         raise self._build_error(response, method, path)
 
+    async def request_json_optional(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: list[tuple[str, str]] | None = None,
+        json_body: JsonBody = None,
+    ) -> JsonValue:
+        """
+        Make an HTTP request where success may carry no body, and return `None`
+        when it does not.
+
+        A great many FOSSA writes answer `204`, or a documented `200`/`201`
+        with no content at all: the issue-exception `PUT`, every team and role
+        delete, the Jira `PATCH`, both snippet rejection endpoints, the
+        organization-settings `PATCH`es, and `POST /components/build`. On all of
+        them `request_json` would call `.json()` on an empty body and report a
+        successful request as a `FossaApiError`, so five domain modules had each
+        grown a private helper that caught that error and inspected its status
+        code to decide whether it was really a success. Expressing it here
+        instead means an empty 2xx never becomes an exception in the first place.
+
+        Only an *empty* body maps to `None`. A 2xx carrying something that is
+        not JSON is still an error, exactly as it is on `request_json` — the
+        old helpers could not tell those two apart.
+
+        Raises:
+            FossaApiError: If the API returns an error or a non-empty, invalid
+                JSON body.
+        """
+        response = await self._request(method, path, params=params, json_body=json_body)
+
+        if 200 <= response.status_code < 300:
+            if not response.content.strip():
+                return None
+            try:
+                return response.json()
+            except json.JSONDecodeError as exc:
+                raise FossaApiError(
+                    status_code=response.status_code,
+                    message="Invalid JSON response from FOSSA API",
+                    method=method,
+                    path=path,
+                ) from exc
+
+        raise self._build_error(response, method, path)
+
+    async def request_redirect_location(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: list[tuple[str, str]] | None = None,
+    ) -> tuple[int, str | None]:
+        """
+        Make a request whose whole payload is the `Location` header of a
+        redirect, and return `(status_code, location)` without following it.
+
+        `GET /services/github-app/installation-url` is the case: it answers
+        `302` with an empty body, and both `request_json` and `request_text`
+        treat that status as an error before the header can be read. Following
+        the redirect would fetch a GitHub HTML page no client can use; verified
+        live, the target is a constant public installation URL carrying no
+        `state`, `code`, or nonce, so returning it is safe and it is not
+        single-use.
+
+        A 2xx is accepted too and yields whatever `Location` it carried, which
+        is normally `None` — an instance that answers this endpoint with a body
+        instead of a redirect is reported as "no URL", not as a transport error.
+
+        Raises:
+            FossaApiError: If the API returns an error status.
+        """
+        response = await self._request(method, path, params=params)
+
+        if response.status_code in _REDIRECT_STATUS_CODES or 200 <= response.status_code < 300:
+            return response.status_code, response.headers.get("location")
+
+        raise self._build_error(response, method, path)
+
     async def request_text(
         self,
         method: str,
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
-        json_body: dict[str, Any] | None = None,
+        json_body: JsonBody = None,
     ) -> tuple[str, str | None]:
         """
         Make an HTTP request and return the raw text response.
@@ -145,7 +243,7 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
-        json_body: dict[str, Any] | None = None,
+        json_body: JsonBody = None,
     ) -> httpx.Response:
         """Perform the HTTP call, retrying transient failures per the retry policy.
 
