@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "f5b13ce15f1f",
+  "strategy": "manual-commit",
+  "branch": "skills/hardening-protect-suggest-score",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "skills/fossa-suggest-score/references/calibration.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/f5/b13ce15f1f/0/metadata.json",
+      "transcript": "/f5/b13ce15f1f/0/full.jsonl",
+      "compact_transcript": "/f5/b13ce15f1f/0/transcript.jsonl",
+      "content_hash": "/f5/b13ce15f1f/0/content_hash.txt",
+      "prompt": "/f5/b13ce15f1f/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 331,
+    "cache_creation_tokens": 380304,
+    "cache_read_tokens": 42092877,
+    "output_tokens": 189335,
+    "api_call_count": 176
+  }
+}
