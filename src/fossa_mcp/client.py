@@ -18,6 +18,14 @@ _MAX_RETRIES = 2
 _BACKOFF_SECONDS = (0.25, 0.75)
 _MAX_RETRY_AFTER_SECONDS = 10.0
 
+# Methods safe to replay after a timeout or transport failure. `POST` and
+# `PATCH` are absent deliberately: when a request dies in flight there is no way
+# to know whether the server applied it, and replaying a `POST /teams` or a
+# `PATCH` that appends to a collection would create a duplicate or double-apply
+# an edit. GET is read-only; PUT and DELETE assign or remove a named resource,
+# so a replay converges on the same state.
+_IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "PUT", "DELETE"})
+
 
 class FossaClient:
     """Asynchronous FOSSA API client.
@@ -58,6 +66,7 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
+        json_body: dict[str, Any] | None = None,
     ) -> dict[str, Any] | list[Any]:
         """
         Make an HTTP request and return the parsed JSON response.
@@ -65,7 +74,9 @@ class FossaClient:
         Raises:
             FossaApiError: If the API returns an error or an invalid JSON body.
         """
-        _, body = await self.request_json_with_status(method, path, params=params)
+        _, body = await self.request_json_with_status(
+            method, path, params=params, json_body=json_body
+        )
         return body
 
     async def request_json_with_status(
@@ -74,6 +85,7 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
+        json_body: dict[str, Any] | None = None,
     ) -> tuple[int, dict[str, Any] | list[Any]]:
         """
         Make an HTTP request and return `(status_code, parsed_json)`.
@@ -85,7 +97,7 @@ class FossaClient:
         Raises:
             FossaApiError: If the API returns an error or an invalid JSON body.
         """
-        response = await self._request(method, path, params=params)
+        response = await self._request(method, path, params=params, json_body=json_body)
 
         if 200 <= response.status_code < 300:
             try:
@@ -126,19 +138,35 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
+        json_body: dict[str, Any] | None = None,
     ) -> httpx.Response:
-        """Perform the HTTP call, retrying transient failures per the retry policy."""
+        """Perform the HTTP call, retrying transient failures per the retry policy.
+
+        Retries are **method-aware**. `POST` and `PATCH` are never replayed after
+        an in-flight failure: the request may well have been applied before the
+        connection died, and replaying it would create a second team, a second
+        service account, or apply an edit twice. Those methods surface the
+        timeout to the caller instead, who can decide whether re-issuing is
+        safe. See `_IDEMPOTENT_METHODS`.
+
+        A retryable *status code* (502/503/504) is different — the server
+        answered and told us it did not process the request — so that path
+        retries for every method.
+        """
         # httpx's QueryParamTypes list branch is invariant on
         # list[tuple[str, str]]; its homogeneous-tuple branch is covariant, so
         # pass a plain tuple instead of relying on structural list compatibility.
         httpx_params = tuple(params) if params else None
+        replayable = method.upper() in _IDEMPOTENT_METHODS
 
         attempt = 0
         while True:
             try:
-                response = await self._client.request(method, path, params=httpx_params)
+                response = await self._client.request(
+                    method, path, params=httpx_params, json=json_body
+                )
             except httpx.TimeoutException as exc:
-                if attempt < _MAX_RETRIES:
+                if replayable and attempt < _MAX_RETRIES:
                     await self._sleep_backoff(attempt)
                     attempt += 1
                     continue
@@ -147,12 +175,19 @@ class FossaClient:
                     message=(
                         f"FOSSA request timed out after {self.settings.fossa_timeout_seconds} "
                         f"seconds while calling {method} {path}."
+                        + (
+                            ""
+                            if replayable
+                            else " It was not retried because a replayed "
+                            f"{method.upper()} could apply the change twice; it may or may not "
+                            "have been applied."
+                        )
                     ),
                     method=method,
                     path=path,
                 ) from exc
             except httpx.TransportError as exc:
-                if attempt < _MAX_RETRIES:
+                if replayable and attempt < _MAX_RETRIES:
                     await self._sleep_backoff(attempt)
                     attempt += 1
                     continue
