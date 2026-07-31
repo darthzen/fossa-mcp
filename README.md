@@ -10,7 +10,17 @@ A Model Context Protocol server for the FOSSA API that allows AI assistants to i
 
 ## Safety Statement
 
-This version is read-only and does not modify FOSSA state.
+**Almost every tool is read-only. Two are not.**
+
+`fossa_enable_security_policy` and `fossa_assign_security_policy_to_projects` change which FOSSA
+security policy governs a project and whether it blocks builds. Every other tool only reads.
+
+Writes are **off by default**. Both write tools refuse before issuing any request unless the
+operator sets `FOSSA_ALLOW_WRITES=true`. Leave it off on any instance that does not need to change
+policy assignments — under the single-tenant model below, everyone who reaches this server shares
+one token and therefore its write access too.
+
+See [DECISIONS.md](DECISIONS.md) §5 for why the earlier read-only guarantee was dropped.
 
 ## Deployment model — single-tenant
 
@@ -48,22 +58,6 @@ Then edit `.env` and add your FOSSA API token:
 ```dotenv
 FOSSA_API_TOKEN=<your-full-api-token>
 ```
-
-### If the checkout lives in iCloud Drive
-
-iCloud Drive sets the macOS `hidden` file flag on files it syncs, and CPython 3.13+
-[skips hidden `.pth` files](https://docs.python.org/3/library/site.html) when building `sys.path`. If
-`.venv` is inside an iCloud-synced folder, the editable install's `.pth` file is ignored and every
-entry point fails with `ModuleNotFoundError: No module named 'fossa_mcp'`. Keep the environment
-outside iCloud:
-
-```bash
-export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/fossa-mcp"
-uv sync
-```
-
-`chflags nohidden .venv/lib/python*/site-packages/*.pth` also works, but only until the next sync
-recreates the file.
 
 ## Validate
 
@@ -128,6 +122,70 @@ every runtime dependency actually installed in that image, generated at build ti
 | `fossa_get_issue` | Retrieve complete detail for one issue |
 | `fossa_project_posture` | Provide one high-value, model-friendly view of a project revision's current FOSSA issue posture |
 | `fossa_get_attribution_report` | Retrieve a text-friendly FOSSA attribution/SBOM report for a revision |
+| `fossa_get_security_policy` | Show the security policy in force for a project: FOSSA's baseline plus the local overlay |
+| `fossa_evaluate_security_policy` | Return an allow/warn/block verdict per dependency for a revision |
+| `fossa_enable_security_policy` | **Writes.** Assign a security policy to a project and enable the enforcement that blocks violating packages |
+| `fossa_assign_security_policy_to_projects` | **Writes.** Assign one security policy to several named projects |
+
+## Security policies
+
+FOSSA blocks a package through a combination of three settings: an assigned **security policy**
+(what counts as a violation), **security issue scanning** (finding violations), and the **security
+status check** (failing the build). `fossa_enable_security_policy` sets all three — that combination
+is the block. FOSSA exposes no per-package block primitive.
+
+Policies are authored in the FOSSA web app. The API has no create-policy or list-policies endpoint,
+so a policy is addressed by the numeric id in its FOSSA URL.
+
+### Local overlay
+
+`FOSSA_POLICY_FILE` points at a JSON file of local rules layered on top of FOSSA's own findings.
+The overlay is **tighten-only**: it can block packages FOSSA currently allows, and it can never
+clear a package FOSSA has raised an active vulnerability against.
+
+```json
+{
+  "version": 1,
+  "security": [
+    {
+      "id": "no-high-severity",
+      "description": "Stricter than the org-wide FOSSA policy",
+      "enabled": true,
+      "rules": {
+        "max_cvss": 7.0,
+        "warn_cvss": 4.0,
+        "deny_severity": ["critical"],
+        "denied_cves": ["CVE-2025-53365"],
+        "denied_packages": ["left-pad", "npm+event-stream"]
+      },
+      "exceptions": [
+        {
+          "package": "pip+requests$2.31",
+          "reason": "Vendored fork, patch applied out of band",
+          "expires": "2026-12-31"
+        }
+      ]
+    }
+  ]
+}
+```
+
+`denied_packages` and `exceptions[].package` accept a full locator (`pip+mcp$1.6.0`, that version
+only), a fetcher-qualified name (`pip+mcp`, any version), or a bare name (`mcp`, any fetcher).
+
+An exception requires a `reason` and suppresses only overlay-introduced blocks. Once `expires`
+passes it stops applying and is reported on the verdict, so a package never silently reverts to
+blocked without explanation. A configured-but-unreadable policy file is an error, not a fallback to
+"no policy".
+
+### Turning enforcement on
+
+```bash
+FOSSA_ALLOW_WRITES=true uv run fossa-mcp
+```
+
+Check what a policy would do before enabling it — `fossa_evaluate_security_policy` is read-only and
+answers exactly that.
 
 ## Example Prompts
 
@@ -151,6 +209,18 @@ Give me the FOSSA risk posture for project <PROJECT_LOCATOR> at revision <REVISI
 Generate the Markdown attribution report for revision <REVISION_LOCATOR>.
 ```
 
+```text
+Which packages in <REVISION_LOCATOR> would my security policy block?
+```
+
+```text
+What security policy is <PROJECT_LOCATOR> using, and is the status check on?
+```
+
+```text
+Apply security policy 7 to <PROJECT_LOCATOR> and turn on blocking.
+```
+
 ## License
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_large)
 
@@ -165,3 +235,4 @@ separate from this project's.
 
 Project decisions — including the deliberate `mcp` version pin and the single-tenant constraint —
 are recorded in [DECISIONS.md](DECISIONS.md).
+

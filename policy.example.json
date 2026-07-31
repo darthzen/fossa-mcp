@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "security": [
+    {
+      "id": "banned-packages",
+      "description": "Packages this organization does not accept, regardless of findings.",
+      "enabled": true,
+      "rules": {
+        "denied_packages": ["go+github.com/prometheus/prometheus"]
+      },
+      "exceptions": []
+    },
+    {
+      "id": "severity-ceiling",
+      "description": "Stricter than the org-wide FOSSA policy.",
+      "enabled": true,
+      "rules": {
+        "max_cvss": 7.0,
+        "warn_cvss": 4.0
+      },
+      "exceptions": []
+    }
+  ]
+}

@@ -13,6 +13,18 @@ class FossaConfigurationError(FossaError):
     pass
 
 
+class FossaPolicyError(FossaError):
+    """Exception raised when the local policy overlay is missing or invalid."""
+
+    pass
+
+
+class FossaWriteNotPermittedError(FossaError):
+    """Exception raised when a write tool runs without `FOSSA_ALLOW_WRITES` enabled."""
+
+    pass
+
+
 class FossaApiError(FossaError):
     """Exception raised when the FOSSA API returns an error."""
 
