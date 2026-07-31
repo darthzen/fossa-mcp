@@ -34,6 +34,7 @@ from mcp.server.fastmcp import Context
 
 from ..client import FossaClient
 from ..config import Settings
+from ..errors import FossaApiError
 from ..models import (
     InventoryType,
     IssueStatus,
@@ -238,10 +239,13 @@ async def get_projects_summary(ctx: Context) -> dict[str, Any]:
     return {"ok": True, "endpoint": "GET /v2/projects/summary", "data": result}
 
 
-_ASSOCIATION_ENDPOINTS: dict[ProjectAssociationSection, str] = {
-    "labels": "GET /projects/{locator}/labels",
-    "release_groups": "GET /v2/projects/{locator}/release-groups",
-    "last_published": "GET /projects/{locator}/last-published",
+# Path template per section; `{locator}` is filled with the encoded locator.
+# The reported `endpoint` string is derived from the same map so the two cannot
+# drift apart.
+_ASSOCIATION_PATHS: dict[ProjectAssociationSection, str] = {
+    "labels": "/projects/{locator}/labels",
+    "release_groups": "/v2/projects/{locator}/release-groups",
+    "last_published": "/projects/{locator}/last-published",
 }
 
 
@@ -254,9 +258,24 @@ async def get_project_associations(
     List a project's labels, its release-group memberships, and the timestamp of
     the last update published for it.
 
-    Read-only. All three sections are fetched unless `sections` narrows it, and
-    each section is one FOSSA call. `last_published` comes back as a bare ISO
-    timestamp string.
+    Read-only. Each section is one FOSSA call. By default this fetches "labels"
+    and "release_groups"; name "last_published" in `sections` to fetch that too.
+    It comes back as a bare ISO timestamp string.
+
+    Sections are independent: one failing section does not discard the others.
+    Every section that answered is under `data`, keyed by section name, and
+    every section FOSSA rejected is under `errors` with its status code and
+    message. The two keys never overlap, so a section that came back empty
+    (present in `data` as `[]` or `{}`) is distinct from one that failed
+    (absent from `data`, present in `errors`). Check `errors` before concluding
+    a project has no labels or no release groups.
+
+    "last_published" is not fetched by default because FOSSA answers it with
+    `404 NotFoundError: Last published date not known` for a project that has
+    never had an update published, which is the common case. Treat that
+    particular 404 as "nothing published yet" rather than as a broken call —
+    FOSSA's own message says the date is not known, not that the project or the
+    endpoint is missing. Any other status under `errors` is a real failure.
     """
     validated = ProjectAssociationsInput(project_locator=project_locator, sections=sections)
 
@@ -266,22 +285,26 @@ async def get_project_associations(
     requested = validated.requested_sections()
 
     data: dict[str, Any] = {}
+    errors: dict[str, Any] = {}
     for section in requested:
-        if section == "labels":
-            data["labels"] = await client.request_json("GET", f"/projects/{encoded_locator}/labels")
-        elif section == "release_groups":
-            data["release_groups"] = await client.request_json(
-                "GET", f"/v2/projects/{encoded_locator}/release-groups"
-            )
-        else:
-            data["last_published"] = await client.request_json(
-                "GET", f"/projects/{encoded_locator}/last-published"
-            )
+        path = _ASSOCIATION_PATHS[section].format(locator=encoded_locator)
+        try:
+            data[section] = await client.request_json("GET", path)
+        except FossaApiError as exc:
+            # Only an answered-but-rejected request is recorded per section. A
+            # transport or configuration failure is not a fact about this
+            # section and still aborts the aggregate.
+            errors[section] = {
+                "status_code": exc.status_code,
+                "error_name": exc.error_name,
+                "message": exc.message,
+            }
 
     return {
         "ok": True,
-        "endpoint": " + ".join(_ASSOCIATION_ENDPOINTS[section] for section in requested),
+        "endpoint": " + ".join(f"GET {_ASSOCIATION_PATHS[section]}" for section in requested),
         "data": data,
+        "errors": errors,
     }
 
 

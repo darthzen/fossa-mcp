@@ -129,7 +129,11 @@ async def test_get_project_associations_fetches_all_three_sections(
     )
 
     client = FossaClient(settings)
-    result = await projects.get_project_associations(make_context(client, settings), PROJECT)
+    result = await projects.get_project_associations(
+        make_context(client, settings),
+        PROJECT,
+        sections=["labels", "release_groups", "last_published"],
+    )
     await client.aclose()
 
     assert labels.called and groups.called and published.called
@@ -143,10 +147,108 @@ async def test_get_project_associations_fetches_all_three_sections(
     assert result["data"]["labels"][0]["label"] == "tier-1"
     assert result["data"]["release_groups"]["releaseGroups"][0]["releaseGroupId"] == 9
     assert result["data"]["last_published"] == "2026-07-30T12:00:00Z"
+    assert result["errors"] == {}
     assert result["endpoint"] == (
         "GET /projects/{locator}/labels + GET /v2/projects/{locator}/release-groups"
         " + GET /projects/{locator}/last-published"
     )
+
+
+@pytest.mark.asyncio
+async def test_get_project_associations_default_omits_last_published(
+    settings, respx_mock, make_context
+):
+    """A bare call must not depend on `last-published`.
+
+    FOSSA 404s that endpoint for any project that has never published, which
+    was 11 of 11 projects in the lab organization. Registering it in the
+    default set made the tool's first-call-by-a-model path fail.
+    """
+    labels = respx_mock.get(f"{BASE}/projects/{ENCODED_PROJECT}/labels").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    groups = respx_mock.get(f"{BASE}/v2/projects/{ENCODED_PROJECT}/release-groups").mock(
+        return_value=httpx.Response(200, json={"releaseGroups": []})
+    )
+    published = respx_mock.get(f"{BASE}/projects/{ENCODED_PROJECT}/last-published").mock(
+        return_value=httpx.Response(200, json="2026-07-30T12:00:00Z")
+    )
+
+    client = FossaClient(settings)
+    result = await projects.get_project_associations(make_context(client, settings), PROJECT)
+    await client.aclose()
+
+    assert labels.called and groups.called
+    assert not published.called
+    assert respx_mock.calls.call_count == 2
+    assert set(result["data"]) == {"labels", "release_groups"}
+    assert result["errors"] == {}
+    assert result["endpoint"] == (
+        "GET /projects/{locator}/labels + GET /v2/projects/{locator}/release-groups"
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_project_associations_reports_a_failing_section_without_losing_the_rest(
+    settings, respx_mock, make_context
+):
+    """One section's 404 must not discard the sections that succeeded."""
+    labels = respx_mock.get(f"{BASE}/projects/{ENCODED_PROJECT}/labels").mock(
+        return_value=httpx.Response(200, json=[{"id": 4, "label": "tier-1"}])
+    )
+    groups = respx_mock.get(f"{BASE}/v2/projects/{ENCODED_PROJECT}/release-groups").mock(
+        return_value=httpx.Response(200, json={"releaseGroups": []})
+    )
+    published = respx_mock.get(f"{BASE}/projects/{ENCODED_PROJECT}/last-published").mock(
+        return_value=httpx.Response(
+            404,
+            json={
+                "message": 'Last published date not known for project with locator "x"',
+                "name": "NotFoundError",
+            },
+        )
+    )
+
+    client = FossaClient(settings)
+    result = await projects.get_project_associations(
+        make_context(client, settings),
+        PROJECT,
+        sections=["labels", "release_groups", "last_published"],
+    )
+    await client.aclose()
+
+    assert labels.called and groups.called and published.called
+    # The successful sections survive.
+    assert result["data"]["labels"][0]["label"] == "tier-1"
+    # An empty section and a failed section are distinguishable: the empty one
+    # is in `data`, the failed one is only in `errors`.
+    assert result["data"]["release_groups"] == {"releaseGroups": []}
+    assert "last_published" not in result["data"]
+    assert result["errors"]["last_published"]["status_code"] == 404
+    assert result["errors"]["last_published"]["error_name"] == "NotFoundError"
+    assert "Last published date not known" in result["errors"]["last_published"]["message"]
+    assert set(result["errors"]) == {"last_published"}
+
+
+@pytest.mark.asyncio
+async def test_get_project_associations_reports_every_failing_section(
+    settings, respx_mock, make_context
+):
+    """With no section succeeding the tool still reports, rather than raising."""
+    respx_mock.get(f"{BASE}/projects/{ENCODED_PROJECT}/labels").mock(
+        return_value=httpx.Response(403, json={"message": "nope", "name": "ForbiddenError"})
+    )
+    respx_mock.get(f"{BASE}/v2/projects/{ENCODED_PROJECT}/release-groups").mock(
+        return_value=httpx.Response(500, json={"message": "boom", "name": "ServerError"})
+    )
+
+    client = FossaClient(settings)
+    result = await projects.get_project_associations(make_context(client, settings), PROJECT)
+    await client.aclose()
+
+    assert result["data"] == {}
+    assert result["errors"]["labels"]["status_code"] == 403
+    assert result["errors"]["release_groups"]["status_code"] == 500
 
 
 @pytest.mark.asyncio

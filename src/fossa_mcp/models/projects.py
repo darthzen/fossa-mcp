@@ -201,6 +201,22 @@ class ProjectLabelApplyInput(BaseModel):
         return self
 
 
+# The sections a bare fossa_get_project_associations call fetches.
+#
+# `last_published` is a valid section but is deliberately **not** here. It is
+# `GET /projects/{locator}/last-published`, which answers
+# `404 NotFoundError: Last published date not known` for a project that has
+# never had an update published — 11 of 11 projects in the lab organization,
+# so a project having no published update is the ordinary case rather than the
+# exception. Leaving it in the default set made the tool's default call depend
+# on a section that usually fails. It stays in `ProjectAssociationSection`, so
+# naming it in `sections` still fetches it and the capability is not lost.
+PROJECT_ASSOCIATION_DEFAULT_SECTIONS: tuple[ProjectAssociationSection, ...] = (
+    "labels",
+    "release_groups",
+)
+
+
 class ProjectAssociationsInput(BaseModel):
     """Input model for fossa_get_project_associations."""
 
@@ -217,7 +233,7 @@ class ProjectAssociationsInput(BaseModel):
 
     def requested_sections(self) -> list[ProjectAssociationSection]:
         """Return the sections to fetch, deduplicated, in a stable order."""
-        requested = self.sections or ["labels", "release_groups", "last_published"]
+        requested = self.sections or list(PROJECT_ASSOCIATION_DEFAULT_SECTIONS)
         seen: list[ProjectAssociationSection] = []
         for section in requested:
             if section not in seen:
