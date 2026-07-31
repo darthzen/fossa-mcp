@@ -1,0 +1,28 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "3e7d246dda9a",
+  "strategy": "manual-commit",
+  "branch": "api-parity",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/fossa_mcp/models/release_groups.py",
+    "src/fossa_mcp/tools/release_groups.py",
+    "tests/test_release_groups_tools.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/3e/7d246dda9a/0/metadata.json",
+      "transcript": "/3e/7d246dda9a/0/full.jsonl",
+      "compact_transcript": "/3e/7d246dda9a/0/transcript.jsonl",
+      "content_hash": "/3e/7d246dda9a/0/content_hash.txt",
+      "prompt": "/3e/7d246dda9a/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 69,
+    "cache_creation_tokens": 144515,
+    "cache_read_tokens": 4516858,
+    "output_tokens": 52433,
+    "api_call_count": 37
+  }
+}
