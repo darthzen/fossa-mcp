@@ -116,7 +116,7 @@ async def test_get_security_policy_falls_back_to_org_default_policy(
 
 @pytest.mark.asyncio
 async def test_evaluate_security_policy_endpoint_and_verdict(
-    settings, respx_mock, make_context, tmp_path
+    settings, respx_mock, make_context, tmp_path, assert_raw_path
 ):
     settings = settings.model_copy(
         update={
@@ -161,10 +161,11 @@ async def test_evaluate_security_policy_endpoint_and_verdict(
     )
     await client.aclose()
 
-    # Matching the respx route is itself the assertion that the locator was
-    # percent-encoded into the path correctly; httpx re-decodes `url.path`.
     request = deps_route.calls.last.request
     assert request.method == "GET"
+    # Encoding is asserted on the bytes sent, not by the route matching: respx
+    # normalizes both sides, so an unescaped `$` would match this route too.
+    assert_raw_path(request, f"/v2/revisions/{ENCODED_REVISION}/dependencies")
     pairs = _query_pairs(request)
     assert ("depth[]", "direct") in pairs
     assert ("count", "50") in pairs
@@ -264,7 +265,7 @@ async def test_assign_refuses_and_sends_nothing_when_writes_disabled(
 
 @pytest.mark.asyncio
 async def test_enable_security_policy_sends_expected_put_body(
-    writable_settings, respx_mock, make_context
+    writable_settings, respx_mock, make_context, assert_raw_path
 ):
     respx_mock.get(f"https://app.fossa.com/api/projects/{ENCODED_PROJECT}").mock(
         return_value=httpx.Response(200, json=PROJECT_BODY)
@@ -281,6 +282,7 @@ async def test_enable_security_policy_sends_expected_put_body(
 
     request = put_route.calls.last.request
     assert request.method == "PUT"
+    assert_raw_path(request, f"/projects/{ENCODED_PROJECT}")
     assert json.loads(request.content) == {
         "securityPolicyId": 9,
         "securityIssueScanningEnabled": True,
@@ -358,9 +360,16 @@ async def test_assign_policy_to_projects_query_and_partial_failure(
 
 
 @pytest.mark.asyncio
-async def test_assign_policy_rejects_empty_and_blank_locators(
+async def test_assign_policy_refuses_an_unbounded_target_set(
     writable_settings, respx_mock, make_context
 ):
+    """No request is built for an empty, blank, or wildcard target set.
+
+    `PUT /v2/projects/policy` does not enforce its locator list: sent without
+    one it re-policies every project matching the filters, and `locators=all`
+    ignores the filters entirely. DECISIONS.md §5 promises that mode is
+    unreachable from this tool; this is the assertion behind the promise.
+    """
     client = FossaClient(writable_settings)
     ctx = make_context(client, writable_settings)
 
@@ -369,6 +378,9 @@ async def test_assign_policy_rejects_empty_and_blank_locators(
 
     with pytest.raises(ValueError, match="blank"):
         await policies.assign_security_policy_to_projects(ctx, 9, [PROJECT, "  "])
+
+    with pytest.raises(ValueError, match="wildcard"):
+        await policies.assign_security_policy_to_projects(ctx, 9, ["all"])
 
     await client.aclose()
     assert respx_mock.calls.call_count == 0

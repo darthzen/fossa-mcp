@@ -197,11 +197,16 @@ entry supersedes it, and `API_PARITY_PLAN.md` holds the domain inventory and run
   the client as a schema error, not reach FOSSA as a 404. This is what keeps a grouped tool from
   degenerating into the generic `fossa_request` proxy that §3.3 rules out — that exclusion stands.
 - **Three write tiers, none implying another** (`src/fossa_mcp/writes.py`): `WRITE`, `DESTRUCTIVE`
-  (deletes and unbounded bulk targets), `ADMIN` (SAML, OIDC, roles, service accounts, team
-  membership). Higher tiers require `FOSSA_ALLOW_WRITES` alongside their own flag, so a
-  half-configured deployment fails closed.
+  (deletes, wholesale replacements, and unbounded bulk targets), `ADMIN` (SAML, OIDC, roles,
+  service accounts, team membership). Higher tiers require `FOSSA_ALLOW_WRITES` alongside their own
+  flag, so a half-configured deployment fails closed.
 - **Tier follows blast radius, not HTTP verb.** `PUT /v2/projects/policy` with `locators=all`
   re-policies an entire organization from one call, so it is `DESTRUCTIVE` despite being a `PUT`.
+  A `PUT` that overwrites a whole record or settings section rather than merging into it is
+  `DESTRUCTIVE` for the same reason: a caller who omits a key erases it, and FOSSA has no undo.
+  This is why `fossa_update_org_settings` requires `DESTRUCTIVE` for `action="replace"` and not
+  only for `action="propagate"` — the tool advertises `destructiveHint=True` on both grounds, and
+  the gate has to say what the hint says.
 - **`POST` and `PATCH` are never retried** (`client.py`, `_IDEMPOTENT_METHODS`). A replayed create
   is a duplicate team or a duplicate service account. Do not make the retry loop uniform.
 - **The ADMIN tier should stay off on the sdf1 deployment.** Under decision 2 the server

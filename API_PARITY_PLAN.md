@@ -12,8 +12,14 @@ Counts here are derived from `spec/fossa-openapi.json` (API 4.34.55). Regenerate
 
 ## Start here
 
-Nothing in the domain inventory below has been started. The foundation it depends on **is** built,
-tested, and green (155 passing) — but uncommitted. Read this section before writing anything.
+**Superseded as of the `parity/integration` merge.** Every domain in the inventory below is done
+except Dependencies. The sections that follow describe the state this plan was written from —
+13 registered tools and an uncommitted foundation — and are kept because the pattern, the tier
+rules, and the standing constraints still govern new work. The numbers in them do not.
+
+Historical, from 2026-07-31: nothing in the domain inventory below has been started. The foundation
+it depends on **is** built, tested, and green (155 passing) — but uncommitted. Read this section
+before writing anything.
 
 ### What already exists
 
@@ -80,9 +86,18 @@ print(json.dumps(op['requestBody'], indent=2))"
   properties in the spec, so field names must come from live responses — `securityPolicyId`,
   `securityIssueScanningEnabled` and friends were confirmed against a real call, not the spec.
   Expect the same gap elsewhere; verify reads against a live org before trusting a shape.
-* **Locators need `quote(locator, safe="")`.** They contain `+`, `/`, and `$`. Note that
-  `httpx.Request.url.path` re-decodes, so assert encoding by letting the respx route match rather
-  than comparing `url.path`.
+* **Locators need `quote(locator, safe="")`.** They contain `+`, `/`, and `$`. Asserting that in a
+  test is harder than it looks, and an earlier version of this document got it wrong:
+
+  **Letting the respx route match does not verify encoding, and neither does comparing
+  `url.path`.** Both normalize the URL before comparing, so a route registered as
+  `/api/projects/pip%2Baiofile` also matches a request that put `pip+aiofile` on the wire
+  unescaped — verified directly against respx 0.23.1. A test that registers an encoded route and
+  then asserts `route.called` passes whether or not the code encodes anything.
+
+  Assert against `request.url.raw_path`, which is the bytes actually sent. The shared
+  `assert_raw_path` fixture in `tests/conftest.py` is the one place that comparison lives; use it
+  rather than writing a local variant.
 
 ---
 
@@ -99,7 +114,8 @@ accuracy degrades long before that. Instead:
   Settings is 57 operations across ~20 near-identical `get/patch/put` triples; that is one
   `fossa_org_settings(section=…, action=…)` tool, not 57.
 
-Target: **~60 tools** covering 271 operations.
+Target when this was written: **~60 tools** covering 271 operations. What shipped is **135**; see
+the note above the domain inventory for why the estimate was low.
 
 Grouped tools must still validate `section` against a `Literal` of known sections, so an invalid
 section is a schema error at the client, not a 404 from FOSSA.
@@ -128,39 +144,60 @@ tool call. Tier follows blast radius, not HTTP method.
 
 ## Domain inventory
 
+`Tools` is the estimate this plan was written with, kept as written. What actually shipped is 135
+registered tools — 71 read-only, 64 write, 27 of the writes destructive — because several domains
+needed a separate tool per delete where the estimate assumed one tool could carry create, update,
+and delete together. A tool carries one tier and one set of annotations, so it cannot.
+
 | Domain | GET | Write | DEL | Tools | Shape | Status |
 |--------|----:|------:|----:|------:|-------|--------|
-| Organization Settings | 22 | 35 | 2 | 3 | grouped | ☐ |
-| Projects | 10 | 10 | 4 | 9 | individual | ☐ |
-| Release Groups | 13 | 7 | 2 | 8 | individual | ☐ |
-| Issues | 14 | 5 | 2 | 8 | individual | partial (2 read) |
-| Revisions | 14 | 3 | 0 | 7 | individual | partial (1 read) |
-| Teams | 9 | 7 | 2 | 7 | individual | ☐ |
+| Organization Settings | 22 | 34 | 1 | 3 | grouped | **done** |
+| Projects | 10 | 10 | 4 | 9 | individual | **done** |
+| Release Groups | 13 | 7 | 2 | 8 | individual | **done** |
+| Issues | 14 | 5 | 2 | 8 | individual | **done** |
+| Revisions | 14 | 3 | 0 | 7 | individual | **done** |
+| Teams | 9 | 7 | 2 | 7 | individual | **done** |
 | Dependencies | 11 | 0 | 0 | 4 | individual | partial (2 read) |
-| OIDC | 5 | 6 | 2 | 2 | grouped | ☐ |
-| Snippets | 9 | 2 | 0 | 4 | individual | ☐ |
-| Binary | 10 | 0 | 0 | 3 | grouped | ☐ |
-| Team Groups | 2 | 6 | 2 | 3 | individual | ☐ |
-| Package Labels | 2 | 6 | 2 | 3 | individual | ☐ |
-| Fossabot | 4 | 2 | 0 | 3 | individual | ☐ |
-| Roles | 3 | 3 | 1 | 2 | individual | ☐ |
-| Issue Filters | 2 | 3 | 1 | 2 | individual | ☐ |
-| Package Observability | 5 | 0 | 0 | 2 | grouped | ☐ |
-| Organization Labels | 2 | 2 | 1 | 2 | individual | ☐ |
-| Users | 3 | 1 | 0 | 2 | individual | ☐ |
-| Report Options | 1 | 3 | 1 | 2 | individual | ☐ |
-| Jira Integration | 1 | 3 | 1 | 2 | individual | ☐ |
-| Custom Risk Scores | 0 | 3 | 1 | 1 | individual | ☐ |
-| SBOM | 2 | 1 | 0 | 2 | individual | ☐ |
-| Audit Logs | 2 | 1 | 0 | 2 | individual | ☐ |
-| Components | 1 | 2 | 0 | 2 | individual | ☐ |
-| License Conclusions | 0 | 2 | 0 | 1 | individual | ☐ |
-| Issue Overview | 1 | 1 | 0 | 1 | individual | ☐ |
-| Organization Limits | 2 | 0 | 0 | 1 | grouped | ☐ |
-| Builds | 2 | 0 | 0 | 1 | individual | ☐ |
-| Vulnerabilities | 2 | 0 | 0 | 2 | individual | ☐ |
-| GitHub App / CLI / Project Labels | 3 | 0 | 0 | 3 | individual | ☐ |
+| OIDC | 5 | 4 | 2 | 11 | individual | **done** |
+| Snippets | 9 | 2 | 0 | 4 | individual | **done** |
+| Binary | 10 | 0 | 0 | 3 | grouped | **done** |
+| Team Groups | 2 | 6 | 2 | 3 | individual | **done** |
+| Package Labels | 2 | 6 | 2 | 3 | individual | **done** |
+| Fossabot | 4 | 2 | 0 | 3 | individual | **done** |
+| Roles | 3 | 3 | 1 | 2 | individual | **done** |
+| Issue Filters | 2 | 3 | 1 | 2 | individual | **done** |
+| Package Observability | 5 | 0 | 0 | 2 | grouped | **done** |
+| Organization Labels | 2 | 2 | 1 | 2 | individual | **done** |
+| Users | 3 | 1 | 0 | 2 | individual | **done** |
+| Report Options | 1 | 3 | 1 | 2 | individual | **done** |
+| Jira Integration | 1 | 3 | 1 | 2 | individual | **done** |
+| Custom Risk Scores | 0 | 3 | 1 | 1 | individual | **done** |
+| SBOM | 2 | 1 | 0 | 2 | individual | **done** |
+| Audit Logs | 2 | 1 | 0 | 2 | individual | **done** |
+| Components | 1 | 2 | 0 | 2 | individual | **done** |
+| License Conclusions | 0 | 2 | 0 | 1 | individual | **done** |
+| Issue Overview | 1 | 1 | 0 | 1 | individual | **done** |
+| Organization Limits | 2 | 0 | 0 | 1 | grouped | **done** |
+| Builds | 2 | 0 | 0 | 1 | individual | **done** |
+| Vulnerabilities | 2 | 0 | 0 | 2 | individual | **done** |
+| GitHub App / CLI / Project Labels | 3 | 0 | 0 | 3 | individual | **done** |
 | Security policies | — | — | — | 4 | individual | **done** |
+
+Two corrections to the counts this table shipped with:
+
+* **OIDC is 11 operations, not 13.** The row read 5 / 6 / 2; the spec has 5 GET, 4 write, and 2
+  DELETE. It is also individual rather than grouped, and 11 tools rather than the 2 estimated:
+  providers, trust relationships, and the token exchange each have a distinct body, so a grouped
+  tool would take a union of conditionally-valid arguments — the shape this document says to avoid.
+* **`PUT` and `DELETE /organizations/{id}/saml` are counted under OIDC, not Organization
+  Settings.** The spec tags them `Organization Settings`, which is why both agents building those
+  domains claimed them. They are implemented once, in `tools/identity.py`, as
+  `fossa_update_saml_settings` and `fossa_delete_saml_settings` — typed `cert` and `entry_point`
+  arguments beat a free-form `values` dict for the configuration that decides who can log in. The
+  Organization Settings row is reduced by those two; `tools/identity.py` is 11 OIDC tools plus
+  those 2.
+
+Dependencies is the one domain still partial: 2 of its 11 reads have tools.
 
 ---
 

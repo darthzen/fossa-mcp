@@ -7,9 +7,11 @@ first does not thereby want the third. So the gate is tiered, and each tier is
 enabled independently:
 
 * `WriteTier.WRITE` — create and update. `FOSSA_ALLOW_WRITES`.
-* `WriteTier.DESTRUCTIVE` — deletes, and operations whose target set is
-  unbounded (bulk endpoints that accept a filter rather than a list of ids).
-  `FOSSA_ALLOW_DESTRUCTIVE`, **and** `FOSSA_ALLOW_WRITES`.
+* `WriteTier.DESTRUCTIVE` — deletes; writes that replace existing state
+  wholesale rather than merging into it, where omitting a key erases it; and
+  operations whose target set is unbounded (bulk endpoints that accept a filter
+  rather than a list of ids). `FOSSA_ALLOW_DESTRUCTIVE`, **and**
+  `FOSSA_ALLOW_WRITES`.
 * `WriteTier.ADMIN` — identity, authentication, and access control: SAML, OIDC,
   roles, service accounts, team membership. `FOSSA_ALLOW_ADMIN`, **and**
   `FOSSA_ALLOW_WRITES`.
@@ -48,7 +50,9 @@ _TIER_SETTING = {
 }
 
 _TIER_RATIONALE = {
-    WriteTier.DESTRUCTIVE: "deletes FOSSA state or acts on an unbounded set of targets",
+    WriteTier.DESTRUCTIVE: (
+        "deletes FOSSA state, replaces it wholesale, or acts on an unbounded set of targets"
+    ),
     WriteTier.ADMIN: "changes identity, authentication, or access control",
 }
 

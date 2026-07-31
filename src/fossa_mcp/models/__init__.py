@@ -4,6 +4,14 @@ These models are constructed inside each tool function from the tool's flat,
 individually-typed parameters (the shape FastMCP needs to build an accurate
 JSON input schema). Constructing the model runs field- and model-level
 validation before any FOSSA HTTP request is made.
+
+This module holds the shared `Literal` aliases and the models for the original
+read tools. Models added by the API-parity work live in a sibling module per
+domain — `models/projects.py`, `models/issues.py`, and so on — mirroring
+`tools/`, so that one domain's models can be read without paging through
+twenty others'. Import them from their own module (`from ..models.projects
+import ProjectUpdateInput`); this package's namespace is deliberately not a
+re-export surface for them.
 """
 
 from datetime import datetime

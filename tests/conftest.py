@@ -3,6 +3,7 @@
 import os
 import sys
 
+import httpx
 import pytest
 
 # Add src to sys.path so the suite runs even when the editable install's .pth
@@ -46,3 +47,39 @@ def settings() -> Settings:
 def make_context():
     """Factory fixture building a FakeContext from a client and settings."""
     return FakeContext
+
+
+def raw_path_of(request: httpx.Request) -> str:
+    """Return the path exactly as it went on the wire, percent-encoding intact.
+
+    `raw_path` carries the query string too, so split it off; query values are
+    asserted separately by each module's `_query_pairs`.
+    """
+    return request.url.raw_path.decode().split("?", 1)[0]
+
+
+def _assert_raw_path(request: httpx.Request, expected: str, *, base: str = "/api") -> None:
+    """Assert a FOSSA locator was percent-encoded into the path exactly once.
+
+    **Letting the respx route match does not verify encoding.** Both respx's
+    route matching and `httpx.Request.url.path` normalize before comparing, so a
+    route registered as `/api/projects/pip%2Baiofile` also matches a request
+    that put `pip+aiofile` on the wire unescaped — verified directly against
+    respx 0.23.1. Any test that "asserts" encoding by registering an encoded
+    route and checking `route.called` passes whether or not the code under test
+    encodes anything.
+
+    `url.raw_path` is the bytes actually sent, so it is the only view that
+    distinguishes the two. This helper is the one place that comparison lives.
+    """
+    assert raw_path_of(request) == f"{base}{expected}"
+
+
+@pytest.fixture
+def assert_raw_path():
+    """Provide `_assert_raw_path` to a test.
+
+    Fixture rather than a plain import so it reads the same as `make_context`
+    and needs no `sys.path` games in the test modules.
+    """
+    return _assert_raw_path

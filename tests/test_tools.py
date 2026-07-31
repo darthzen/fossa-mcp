@@ -78,18 +78,32 @@ async def test_list_projects_rejects_count_over_max_page_size_before_request(
 
 
 @pytest.mark.asyncio
-async def test_get_project_encodes_locator_once(settings, respx_mock, make_context):
+async def test_get_project_encodes_locator_once(
+    settings, respx_mock, make_context, assert_raw_path
+):
+    """The locator reaches FOSSA as one encoded path segment.
+
+    This test used to assert nothing: it registered an encoded route and
+    checked only that the route was hit, and respx matches an unescaped
+    request against an encoded route. `assert_raw_path` compares the bytes
+    that went on the wire, which is the only comparison that fails when the
+    encoding is dropped or applied twice.
+    """
     locator = "git+github.com/acme/widget"
-    route = respx_mock.get(
-        "https://app.fossa.com/api/projects/git%2Bgithub.com%2Facme%2Fwidget"
-    ).mock(return_value=httpx.Response(200, json={"title": "widget"}))
+    encoded = "git%2Bgithub.com%2Facme%2Fwidget"
+    route = respx_mock.get(f"https://app.fossa.com/api/projects/{encoded}").mock(
+        return_value=httpx.Response(200, json={"title": "widget"})
+    )
     client = FossaClient(settings)
     ctx = make_context(client, settings)
 
     result = await projects.get_project(ctx, project_locator=locator)
     await client.aclose()
 
-    assert route.calls.last.request.method == "GET"
+    request = route.calls.last.request
+    assert request.method == "GET"
+    assert_raw_path(request, f"/projects/{encoded}")
+    assert "%25" not in request.url.raw_path.decode()
     assert result["data"]["title"] == "widget"
 
 
@@ -175,7 +189,14 @@ async def test_list_dependencies_endpoint_and_defaults(settings, respx_mock, mak
 
 
 @pytest.mark.asyncio
-async def test_get_dependency_encodes_both_locators(settings, respx_mock, make_context):
+async def test_get_dependency_encodes_both_locators(
+    settings, respx_mock, make_context, assert_raw_path
+):
+    """Both path segments are encoded, asserted on the bytes sent.
+
+    An unescaped `$` in either segment would still match this respx route while
+    addressing a different resource on the real API.
+    """
     route = respx_mock.get(
         "https://app.fossa.com/api/v2/revisions/rev%241/dependencies/dep%242"
     ).mock(return_value=httpx.Response(200, json={"title": "dep"}))
@@ -188,6 +209,7 @@ async def test_get_dependency_encodes_both_locators(settings, respx_mock, make_c
     await client.aclose()
 
     assert route.calls.last.request.method == "GET"
+    assert_raw_path(route.calls.last.request, "/v2/revisions/rev%241/dependencies/dep%242")
     assert result["data"]["title"] == "dep"
 
 

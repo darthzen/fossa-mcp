@@ -93,7 +93,7 @@ async def test_posture_upstream_query_parameters(settings, respx_mock, make_cont
 
 @pytest.mark.asyncio
 async def test_posture_sends_bare_revision_to_issues_and_full_locator_to_dependencies(
-    settings, respx_mock, make_context
+    settings, respx_mock, make_context, assert_raw_path
 ):
     """The two endpoint families need different forms of the same revision.
 
@@ -136,6 +136,9 @@ async def test_posture_sends_bare_revision_to_issues_and_full_locator_to_depende
             assert pairs["scope[revision]"] == sha
             assert pairs["scope[id]"] == project
     assert deps.call_count == 2
+    # The full locator has to be percent-encoded into the path, which the
+    # route match above does not establish — respx normalizes both sides.
+    assert_raw_path(deps.calls.last.request, f"/v2/revisions/{quote(full, safe='')}/dependencies")
 
 
 @pytest.mark.asyncio
