@@ -1,0 +1,29 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "22746e301c42",
+  "strategy": "manual-commit",
+  "branch": "parity/audit-fixes",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "DECISIONS.md",
+    "src/fossa_mcp/tools/org_settings.py",
+    "src/fossa_mcp/writes.py",
+    "tests/test_org_settings_tools.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/22/746e301c42/0/metadata.json",
+      "transcript": "/22/746e301c42/0/full.jsonl",
+      "compact_transcript": "/22/746e301c42/0/transcript.jsonl",
+      "content_hash": "/22/746e301c42/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 39,
+    "cache_creation_tokens": 18520,
+    "cache_read_tokens": 2037677,
+    "output_tokens": 10375,
+    "api_call_count": 21
+  }
+}
