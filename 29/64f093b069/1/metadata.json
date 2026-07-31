@@ -1,0 +1,52 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "2964f093b069",
+  "session_id": "ecda57d0-0b1c-400d-9226-3ac6e1de0076",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-31T22:38:28.756238Z",
+  "branch": "fix/spec-drift-doc-reference",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "skills/fossa-spec-drift/SKILL.md"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-fable-5",
+  "turn_id": "0bd4548dbb2f",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 191,
+    "cache_creation_tokens": 480712,
+    "cache_read_tokens": 15055162,
+    "output_tokens": 103296,
+    "api_call_count": 102
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-31T22:38:28.535071Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 2,
+    "human_modified": 4,
+    "human_removed": 0,
+    "total_committed": 2,
+    "total_lines_changed": 6,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1381,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "docs/ENDPOINT_INFERENCE.md": 338,
+        "docs/UI_API_GAPS.md": 140,
+        "skills/fossa-protect/SKILL.md": 303,
+        "skills/fossa-protect/references/waf-wire-contract.md": 150,
+        "skills/fossa-suggest-score/SKILL.md": 220,
+        "skills/fossa-suggest-score/references/calibration.md": 230
+      }
+    }
+  ]
+}

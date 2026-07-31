@@ -3,8 +3,10 @@
   "checkpoint_id": "2964f093b069",
   "strategy": "manual-commit",
   "branch": "fix/spec-drift-doc-reference",
-  "checkpoints_count": 1,
-  "files_touched": null,
+  "checkpoints_count": 2,
+  "files_touched": [
+    "skills/fossa-spec-drift/SKILL.md"
+  ],
   "sessions": [
     {
       "metadata": "/29/64f093b069/0/metadata.json",
@@ -12,13 +14,20 @@
       "compact_transcript": "/29/64f093b069/0/transcript.jsonl",
       "content_hash": "/29/64f093b069/0/content_hash.txt",
       "prompt": "/29/64f093b069/0/prompt.txt"
+    },
+    {
+      "metadata": "/29/64f093b069/1/metadata.json",
+      "transcript": "/29/64f093b069/1/full.jsonl",
+      "compact_transcript": "/29/64f093b069/1/transcript.jsonl",
+      "content_hash": "/29/64f093b069/1/content_hash.txt",
+      "prompt": "/29/64f093b069/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 11,
-    "cache_creation_tokens": 9585,
-    "cache_read_tokens": 2284909,
-    "output_tokens": 5887,
-    "api_call_count": 6
+    "input_tokens": 202,
+    "cache_creation_tokens": 490297,
+    "cache_read_tokens": 17340071,
+    "output_tokens": 109183,
+    "api_call_count": 108
   }
 }
