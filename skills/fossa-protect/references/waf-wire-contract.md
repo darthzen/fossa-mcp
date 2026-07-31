@@ -43,8 +43,12 @@ Both sensor writes wrap the body in `{"config": {...}}`.
   layer rejects `key` as an extra field and supplies it itself — pass only `op`,
   `value` and `context` to `nv_create_waf_sensor` / `nv_update_waf_sensor`. This
   document describes the controller's JSON, not the tool signature.
-- `op` is `regex` or `!regex`. **`!regex` is supported and round-trips.**
-- `context` is `url` | `header` | `body` | `packet`.
+- `op` is `regex` or `!regex`. **`!regex` is supported and round-trips.** The
+  tool layer defaults it to `regex` when omitted.
+- `context` is `url` | `header` | `body` | `packet`. **The tool layer defaults
+  it to `packet`** — the one value whose matching behaviour is still UNVERIFIED
+  below. Always pass `context` explicitly; an omitted `context` is not a
+  neutral choice.
 - `rules` **REPLACES** the sensor's entire rule list on PATCH. Omitted rules are
   deleted silently.
 

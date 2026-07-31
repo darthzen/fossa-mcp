@@ -13,6 +13,24 @@ score below is unaltered.
 see "The assumption that was wrong" at the end for why that distinction cost 12
 points on one project and 12 on another, in opposite directions.
 
+**Re-verified against live FOSSA data.** Every CVSS, EPSS percentile and
+`remediation` value quoted here was re-pulled and every arithmetic block
+recomputed; all of them still reproduce exactly. Two things to know when
+matching new work against these anchors:
+
+- **Rounding is inconsistent in this file, by one point, twice.** Issue-level
+  scores here round half **up** (54.5 → 55, 82.5 → 83) while the two project
+  roll-ups round half **down** (56.5 → 56, 93.5 → 93). SKILL.md now fixes the
+  rule at half-up; under it those roll-ups would read 57 and 94. The numbers
+  are left as they were computed so the anchors match the report they came
+  from. Neither ±1 crosses a band boundary — this is a rendering difference,
+  not a scoring one.
+- **The licensing anchors count raw issue rows.** Both were scored before the
+  collapse rule in SKILL.md step 5. The LIS *values* (28 and 28) are unaffected
+  — LIS scores a license and a linkage, not a row count — but the "15 flags"
+  and "16 flags" figures are pre-collapse totals, and one of them is mostly
+  packaging fan-out (see the note under the first licensing anchor).
+
 ## Result
 
 | Project | Shape | L/S/Q | Worst CVSS | Peak EPSS %ile | CIRS | Band |
@@ -24,6 +42,12 @@ points on one project and 12 on another, in opposite directions.
 | `web-app` | Next.js SaaS, private repo | 16/1/19 | 6.1 | 10.7 | 31 | Low |
 
 Five further projects had zero issues and were reported as clean.
+
+The org has since grown a **duplicate project**: the same repo as `scanner-mcp`
+at the same commit, uploaded separately under a `custom+` locator with its own
+title. It returns the *same issue ids* as `scanner-mcp` and differs only in
+which dev dependencies its scan included. It is not a sixth scored project and
+must not become one — see the dedup rule in SKILL.md step 1.
 
 The deployment facts behind these numbers were each read out of source or
 deployment config, not inferred: the transport default in each server's entry
@@ -173,6 +197,14 @@ CVSS 6.8 landing at 34 is correct and is the point of the rubric.
 addons (dynamically loaded, not statically linked), MPL-2.0 on the web
 framework, one CC-BY-SA-4.0 policy conflict. Private repo, SaaS deployment.
 
+Those 16 rows collapse to **three** findings: the 14 LGPL rows are 14
+per-architecture variants of one image-processing dependency, and the other two
+are one row each. This is the case SKILL.md step 5 collapses and step 6 refuses
+to count as volume. It is also the case that exposed the truncation trap: at
+`top_issue_count=15` the page returned all 14 LGPL duplicates plus the MPL row
+and dropped the CC-BY-SA-4.0 `policy_conflict` — the only non-`policy_flag`
+finding the project had, and the one that most needed reading.
+
 ```
 Copyleft 60 (weak: LGPL/MPL) × (Linkage 50 / 100) × 0.8 = 24
 Distribution 20 (SaaS, private) × 0.2                   =  4
@@ -183,6 +215,12 @@ Distribution 20 (SaaS, private) × 0.2                   =  4
 **`scanner-mcp`** — 15 flags: GPL-2.0-only discovered in a direct dev-tool
 dependency, GPL/LGPL/CPL in a transitive dev dependency. Public repo, but
 neither package is bundled into anything distributed.
+
+These 15 rows collapse to **three** findings, on three packages. The fan-out
+here is the other axis from `web-app`'s: one multi-licensed package alone
+raised 11 rows — GPL-2.0-only, GPL-2.0-or-later, GPL-3.0-only,
+GPL-3.0-or-later, three LGPL-2.1/3.0 variants, two exception-qualified forms
+and CPL-1.0 — which is one dependency and one linkage decision, not eleven.
 
 ```
 Copyleft 100 (strong GPL) × (Linkage 10 / 100) × 0.8 = 8

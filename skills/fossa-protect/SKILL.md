@@ -37,6 +37,13 @@ Resolve the project first — never guess a locator:
 - `fossa_list_projects(title=...)` → the locator (e.g. `git+github.com/org/repo`).
   If the project was not named, `sort="issues-security_desc"` puts the candidates
   worth asking about at the top; offer those rather than the whole inventory.
+  **`title` is a substring match and one repo can be several FOSSA projects.**
+  Observed live: a title search returned both a continuously scanned
+  `git+<host>/<org>/<repo>` project and a separately uploaded `custom+<orgId>/…`
+  project for the *same commit*, where the second reported **zero** security
+  issues. Taking the first row without reading it is how you conclude a project
+  has nothing to protect when it has findings. Match on the commit SHA
+  (`version`) and pick the scan the user actually operates against.
 - `fossa_list_issues(category="vulnerability", scope_type="project",
   project_locator=..., revision_locator=...)` — **project scope requires
   `revision_locator` as well**, or the call fails validation. Take it from the
@@ -53,11 +60,31 @@ Do this **before** triage, not after. Triage is not answerable in the abstract:
 whether a CVE is reachable at all depends on how this deployment is configured,
 and getting that backwards means writing a sensor for something that cannot fire.
 
-Confirm the workloads are running and serving traffic:
+**First check that the NeuVector tools exist at all — this is a precondition,
+not a formality.** Everything from here to step 8 runs through `nv_*` tools, and
+they are present only when a NeuVector MCP server is connected to this session.
+That server is a separate deployment from the FOSSA one and is routinely absent:
+observed live, a session with full FOSSA access and a working kubeconfig had **no
+`nv_*` tools whatsoever**. Confirm with a cheap read — `nv_whoami`, or
+`nv_list_workloads` — before promising a plan that depends on them.
+
+If the tools are missing, or present but unable to reach a controller, **say so
+immediately and deliver the part of this skill that does not need them.** Steps 1
+and 3 are independently valuable and are not a consolation prize: the findings,
+the deployment facts you *can* read, the good/partial/none/n-a triage table, and
+the dependency upgrades that actually fix the CVEs. Then state plainly which
+steps did not run and what would be needed to run them. Do not draft sensor
+definitions as though they had been created, do not describe a binding that does
+not exist, and do not substitute `kubectl` for the WAF surface — `kubectl` can
+show you pods, and cannot create, bind, or validate a sensor.
+
+With the tools available, confirm the workloads are running and serving traffic:
 
 - `nv_list_workloads` / `kubectl get pods -n <ns>`
 - `nv_list_groups(name_prefix="nv.<service>")` — plain listing truncates and is
-  alphabetical, so the group you want may simply not be on the page
+  alphabetical, so the group you want may simply not be on the page. It pages
+  with `start`/`limit` and defaults to `limit=50`; page it rather than
+  concluding a group is absent.
 - `nv_list_waf_groups(bound_only=true)` for what already has sensors
 
 Then read the deployment's actual configuration — Deployment, Service, Ingress,
@@ -85,10 +112,23 @@ kubectl exec -n <ns> deploy/<name> -- sh -c \
 ```
 
 (`python` may not be on PATH; try `python3` and known venv paths.) Fall back to
-NeuVector's scan of the running image (`nv_get_scan_report`,
-`nv_list_image_scan_summaries`) when exec is not possible. If they cannot be
-reconciled, say so — the findings describe the source tree, not necessarily the
-process you are about to put a sensor in front of.
+NeuVector's scan of the running image (`nv_list_image_scan_summaries` to find
+it, then `nv_get_scan_report`, which needs both a `target` and a `target_id`
+— it will not take a bare image name) when exec is not possible. If they cannot
+be reconciled, say so — the findings describe the source tree, not necessarily
+the process you are about to put a sensor in front of.
+
+**The image scan answers nothing when the code is not in the image.** Check how
+the application actually gets into the container before trusting a scan of it.
+Observed live: a Deployment running a stock upstream language base image with
+the entire application mounted in from a ConfigMap — a pattern that also shows
+up with PVC mounts, initContainers that fetch source, and sidecar-populated
+volumes. Scanning that image reports the base image's packages and says nothing
+whatsoever about the dependency the CVE is in, while looking like a clean
+correlation. In this shape the only real answers are exec-ing the installed
+version out of the running process, or reading the mounted source itself; if
+you can do neither, the correlation is **unestablished**, and that is what the
+report should say.
 
 **The running artifact can be *newer* than the findings.** Hit live 2026-07-31:
 the repo manifest pinned a vulnerable version, but the image had been built with
@@ -129,6 +169,12 @@ A CVE that is **n/a** may still be worth a cheap one-pattern **canary** — an
 `Upgrade: websocket` on a service that speaks only streamable HTTP is anomalous
 by definition. Label it as a canary, never as mitigation of that CVE.
 
+Order the table by consequence, not by CVSS. Reachability and exposure decide
+which of these findings matters here, and raw CVSS routinely disagrees with that
+ordering — [[fossa-suggest-score]] is the worked rubric for it, and its
+reachability and exposure terms are the same judgments step 2 just made. Reuse
+them rather than re-deriving an ad-hoc ranking.
+
 Put this in a table with the CVSS and the real fix. **Do not inflate the count
 of mitigable CVEs** — it is tempting to describe "partial" as covered, or to
 count an n/a finding because you wrote a rule near it. State coverage
@@ -142,7 +188,12 @@ Semantics that drive the whole design:
 - **Patterns within a rule are ANDed. Rules within a sensor are ORed.**
 - `op: "regex"` fires on match. `op: "!regex"` fires when it does **not** match —
   this is how allowlists are written and it is very easy to get backwards.
-- `context`: `url` | `header` | `body` | `packet`.
+- `context`: `url` | `header` | `body` | `packet`. **Set it on every pattern,
+  explicitly.** The tool defaults `context` to `packet` when you omit it — and
+  `packet` is the one mode whose matching behaviour the reference still marks
+  UNVERIFIED, so an omitted `context` quietly opts you into the mode you were
+  told not to rely on. It is also not what you meant: a header rule written
+  without `context` matches raw bytes, not header lines.
 
 **The `!regex` trap.** An over-narrow `!regex` fires on every legitimate request.
 Never use a bare `!regex` where the field may be absent — "header missing"
@@ -191,7 +242,11 @@ Every mutating NeuVector tool is a **two-step handshake**: call without
 plus `confirm=<token>`. A plan is not a change — nothing reaches the controller.
 Changing any argument invalidates the token; re-plan.
 
-- `nv_create_waf_sensor(sensor_name, comment, rules)`
+- `nv_create_waf_sensor(sensor_name, rules, comment)` — `comment` is optional
+  and defaults to empty. Nothing forces you to write one and nothing validates
+  its length until the controller rejects it, which is why step 4 says to count
+  the characters yourself. Write one anyway: it is the only thing that explains
+  this sensor to whoever inherits it.
 - `nv_update_waf_sensor(sensor_name, rules)` — **replaces the rule list
   wholesale.** Always `nv_get_waf_sensor` first and send back existing rules plus
   your changes, or you silently delete detections.
@@ -289,9 +344,20 @@ the same mutation.
 
 Rollback, in order:
 
-1. `nv_set_waf_group(group, sensors=[])` — unbind; stops all inspection
-2. `nv_delete_waf_sensor(name)` — check `groups` is empty first; deleting a bound
-   sensor removes inspection silently and nothing reports the gap
+1. `nv_set_waf_group(group_name=..., sensors=[])` — unbind; stops all inspection
+2. `nv_delete_waf_sensor(sensor_name=...)` — check `groups` is empty first;
+   deleting a bound sensor removes inspection silently and nothing reports the gap
+
+The parameter is `sensor_name`, not `name`; every WAF tool takes `sensor_name` /
+`group_name`, and both of these are mutating, so both need the plan-then-confirm
+handshake from step 5. Rollback is the worst place to discover an argument-name
+error, so pass them by keyword.
+
+To find what a previous run left behind — the "review sensors created this way"
+case — start from `nv_list_waf_sensors(name_prefix="sensor.")` for the sensors
+and `nv_list_waf_groups(bound_only=true)` for the bindings, then
+`nv_get_waf_sensor` for the regex bodies. A sensor that no group binds is inert
+but still present, and it will not show up in a bindings-only listing.
 
 ## Scope
 
