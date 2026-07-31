@@ -687,3 +687,176 @@ Verified out-of-tree: all 15 register on a real `FastMCP` and produce valid JSON
 <usage><subagent_tokens>214156</subagent_tokens><tool_uses>72</tool_uses><duration_ms>895150</duration_ms></usage>
 <worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-ac02a0e45114bd228</worktreePath><worktreeBranch>worktree-agent-ac02a0e45114bd228</worktreeBranch></worktree>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>a89ca749886ca34ff</task-id>
+<tool-use-id>toolu_01X3taxBDR9q7W3q9c8pNq5X</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a89ca749886ca34ff.output</output-file>
+<status>completed</status>
+<summary>Agent "Inventory and analysis long tail" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. Branch `parity/inventory` (from `api-parity`), one commit `8433054`.
+
+## Files
+
+- `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a89ca749886ca34ff/src/fossa_mcp/models/inventory.py`
+- `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a89ca749886ca34ff/src/fossa_mcp/tools/inventory.py`
+- `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a89ca749886ca34ff/tests/test_inventory_tools.py`
+
+## Tools — 19, covering 30 operations
+
+| Tool | Endpoint(s) | Tier |
+|---|---|---|
+| `fossa_binary_components` | GET `/binary/revision/{rev}/components/{count,paths}`, GET `/binary/release-group/{rgId}/release/{relId}/components/{count,paths}` | read |
+| `fossa_binary_dependency_confidence` | GET `/binary/{rev}/dependency-confidence[/{dep}]`, GET `/binary/release/{relId}/dependency-confidence[/{dep}]` | read |
+| `fossa_binary_revision_detail` | GET `/binary/{rev}/{componentId}/matches`, GET `/binary/{rev}/{dep}/components` | read |
+| `fossa_list_packages` | GET `/packages` | read |
+| `fossa_package_observability` | GET `/packages/package-summary`, `/packages/package-managers`, `/packages/package-locators` | read |
+| `fossa_export_package_index` | GET `/packages/report` | read |
+| `fossa_get_component_upload_url` | GET `/components/signed_url` | read |
+| `fossa_resolve_purls` | POST `/components/resolve-purls` | **WRITE** |
+| `fossa_build_component` | POST `/components/build` | **WRITE** |
+| `fossa_get_audit_logs` | GET `/audit_logs`, GET `/count/audit_logs` | read |
+| `fossa_export_audit_logs` | POST `/audit_logs/export` | **WRITE** |
+| `fossa_get_sbom_sharing` | GET `/v1/share-requests`, GET `/v1/shared-organizations` | read |
+| `fossa_share_sbom_revision` | POST `/v1/share-requests` | **WRITE** |
+| `fossa_set_license_conclusion` | PUT `/license-conclusions/conclude`, PUT `/license-conclusions/unconclude` | **WRITE / DESTRUCTIVE** (per call) |
+| `fossa_get_builds` | GET `/builds`, GET `/counts/builds` | read |
+| `fossa_search_cves` | GET `/vulns/cve-list` | read |
+| `fossa_get_vulnerability_remediation` | GET `/vulns/{vulnId}/revisions/{revisionId}/remediation-guidance` | read |
+| `fossa_get_cli_organization` | GET `/cli/organization` | read |
+| `fossa_get_github_app_installation_url` | GET `/services/github-app/installation-url` | read |
+
+## Tool NOT created — duplicate
+
+**`GET /projects/{locator}/labels`** (the whole "Project Labels" tag) is already reachable via `fossa_get_project_associations(sections=["labels"])` in `tools/projects.py`, which fetches it at `_ASSOCIATION_ENDPOINTS["labels"]`. A second tool would be a near-duplicate, so the domain is covered with zero new tools.
+
+Two near-misses I kept, with reasons:
+- `fossa_get_vulnerability_remediation` vs. the existing `fossa_get_revision_remediation_guidance` — different endpoints and granularity (one vuln × one revision, returning `partialFix`/`completeFix` + semver distance, vs. the whole-revision report). Cross-referenced in both directions in the docstring.
+- `fossa_search_cves` vs. `fossa_list_issues` — `/vulns/cve-list` is a CVE *catalog* lookup independent of whether the org is affected. Docstring points at `fossa_list_issues` for the findings view.
+
+## License Conclusions tier decision
+
+One tool, `action: Literal["conclude","unconclude"]`, tier computed per call (the `fossa_update_issues` precedent):
+
+- **`unconclude` → DESTRUCTIVE at every scope.** It removes state, and `tools/issues.py` already establishes that "every exception delete is DESTRUCTIVE" under the §7 rule. Removing a conclusion can reopen licensing issues across everything in scope, and the caller cannot see the prior conclusion set before acting.
+- **`conclude` → WRITE at project / revision / release_group / release scope** — a create-or-update against a named target, which is exactly the WRITE definition.
+- **`conclude` → DESTRUCTIVE at `organization` or `global` scope.** One call re-licenses a dependency for every project in the org (or, for `global`, FOSSA's whole corpus). That is the unbounded-target case DESTRUCTIVE exists for; §7's "tier follows blast radius, not HTTP verb" applies even though it is a create.
+
+The scope `oneOf` has **six** branches, not two: `project` (projectLocator), `revision` (projectLocator + revisionLocator), `release_group` (releaseGroupId), `release` (releaseGroupId + releaseId), `organization` (organizationId), `global` (no ids, FOSSA-admin only). `scope` is required with no default; each branch's ids are required and any id belonging to a different branch is **rejected**, not dropped — `test_license_conclusion_scope_never_defaults_to_org_wide` pins all of it, including that `scope="global"` + `project_locator` raises rather than silently widening.
+
+## Registration snippet for `server.py`
+
+Add to the import line: `from .tools import dependencies, inventory, issues, policies, posture, projects, reports, revisions`
+
+Two new annotation constants are needed (the existing `_POLICY_WRITE` sets `destructiveHint=False`, which is wrong for these):
+
+```python
+# Creates or queues work but destroys nothing. POST-backed, so a retry is not
+# safe: idempotentHint is False.
+_INVENTORY_WRITE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+
+# fossa_set_license_conclusion can remove a conclusion and can act org-wide, so
+# it must advertise destructiveHint even when a given call is only a WRITE. Both
+# endpoints are PUT and converge on re-application, hence idempotentHint.
+_INVENTORY_DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
+mcp.tool(name="fossa_binary_components", annotations=_READ_ONLY)(inventory.binary_components)
+mcp.tool(name="fossa_binary_dependency_confidence", annotations=_READ_ONLY)(
+    inventory.binary_dependency_confidence
+)
+mcp.tool(name="fossa_binary_revision_detail", annotations=_READ_ONLY)(
+    inventory.binary_revision_detail
+)
+mcp.tool(name="fossa_list_packages", annotations=_READ_ONLY)(inventory.list_packages)
+mcp.tool(name="fossa_package_observability", annotations=_READ_ONLY)(
+    inventory.package_observability
+)
+mcp.tool(name="fossa_export_package_index", annotations=_READ_ONLY)(
+    inventory.export_package_index
+)
+mcp.tool(name="fossa_get_component_upload_url", annotations=_READ_ONLY)(
+    inventory.get_component_upload_url
+)
+mcp.tool(name="fossa_resolve_purls", annotations=_INVENTORY_WRITE)(inventory.resolve_purls)
+mcp.tool(name="fossa_build_component", annotations=_INVENTORY_WRITE)(inventory.build_component)
+mcp.tool(name="fossa_get_audit_logs", annotations=_READ_ONLY)(inventory.get_audit_logs)
+mcp.tool(name="fossa_export_audit_logs", annotations=_INVENTORY_WRITE)(
+    inventory.export_audit_logs
+)
+mcp.tool(name="fossa_get_sbom_sharing", annotations=_READ_ONLY)(inventory.get_sbom_sharing)
+mcp.tool(name="fossa_share_sbom_revision", annotations=_INVENTORY_WRITE)(
+    inventory.share_sbom_revision
+)
+mcp.tool(name="fossa_set_license_conclusion", annotations=_INVENTORY_DESTRUCTIVE)(
+    inventory.set_license_conclusion
+)
+mcp.tool(name="fossa_get_builds", annotations=_READ_ONLY)(inventory.get_builds)
+mcp.tool(name="fossa_search_cves", annotations=_READ_ONLY)(inventory.search_cves)
+mcp.tool(name="fossa_get_vulnerability_remediation", annotations=_READ_ONLY)(
+    inventory.get_vulnerability_remediation
+)
+mcp.tool(name="fossa_get_cli_organization", annotations=_READ_ONLY)(
+    inventory.get_cli_organization
+)
+mcp.tool(name="fossa_get_github_app_installation_url", annotations=_READ_ONLY)(
+    inventory.get_github_app_installation_url
+)
+```
+
+I verified this exact snippet builds 19 valid FastMCP tool schemas (all with `additionalProperties: false`) against a throwaway `FastMCP` instance, without touching `server.py`.
+
+## Tier-set additions for `tests/test_mcp_integration.py`
+
+`EXPECTED_READ_ONLY_TOOL_NAMES` += `fossa_binary_components`, `fossa_binary_dependency_confidence`, `fossa_binary_revision_detail`, `fossa_list_packages`, `fossa_package_observability`, `fossa_export_package_index`, `fossa_get_component_upload_url`, `fossa_get_audit_logs`, `fossa_get_sbom_sharing`, `fossa_get_builds`, `fossa_search_cves`, `fossa_get_vulnerability_remediation`, `fossa_get_cli_organization`, `fossa_get_github_app_installation_url`
+
+`EXPECTED_WRITE_TOOL_NAMES` += `fossa_resolve_purls`, `fossa_build_component`, `fossa_export_audit_logs`, `fossa_share_sbom_revision`, `fossa_set_license_conclusion`
+
+## Test count
+
+**325 passed** (281 baseline → 44 new). `uv run ruff check .`, `ruff format --check .`, and `uv run pyright` all clean.
+
+## Spec gaps found (API 4.34.55)
+
+1. **`GET /services/github-app/installation-url` documents no 2xx at all** — only a `302`, and the entire payload is the `Location` header. `request_json` and `request_text` both raise on a non-2xx before the header can be read, so this tool calls `client._request` directly to get the raw response. That is the one place in the module reaching past the client's public surface; a `request_raw` (or `follow_redirects`-aware) method on `client.py` would remove it, but I did not add one to avoid conflicting with the other parity branches.
+2. **`POST /components/build` documents its `201` as bare `{"description": "Created"}`** with no content schema — a bodyless 2xx. Handled with a local `_request_tolerating_empty_body` mirroring the one in `tools/issues.py`.
+3. **`GET /counts/builds` returns a bare JSON number** (`4`), not an object. `client.request_json` is typed `-&gt; dict | list` but returns an `int` here at runtime. Harmless, but the annotation is a lie for this endpoint; pinned by `test_get_builds_count_view_returns_bare_number`.
+4. **`GET /counts/builds` declares `locator` and `projectId` optional but its own 400 example says one is required** (`"'locator' or 'projectId' must be passed in to this endpoint."`). I left both optional to match the declared contract and documented the requirement in the tool docstring rather than enforcing something the spec contradicts.
+5. **Three array serializations coexist and are not interchangeable.** `/packages` and `/packages/report` document bracket-and-index (`fetchers[0]=npm`, `locators[0]=npm+corejs`) with no `style`/`explode`; the audit-log endpoints put `[]` in the parameter *name* (`actingUserIds[]`); `/components/build`'s `labels` declares `style: form` (repeated bare key). All three appear in this module.
+
+## Deliberate deviations from the planned counts
+
+- **Package Observability: 3 tools, not 2.** `GET /packages/report` queues an export and emails the org's package inventory out; folding that into a grouped read tool alongside `summary`/`package_managers`/`locators` seemed like a footgun, so it is its own tool.
+- **Components: 3 tools, not 2.** Signed-URL, build, and PURL resolution are three distinct operator actions and the upload step happens outside this server entirely.
+- **GitHub App / CLI / Project Labels: 2 tools, not 3** — because of the Project Labels duplicate above.
+
+## One correction worth flagging
+
+The brief said to assert locator encoding "by letting the respx route match, not by comparing `url.path`". **That does not hold against respx 0.22** — I probed it: a route registered with `.../git%2Bgithub.com%2Facme%2Fwidget%24abc123/...` matches a request that sent the locator completely unescaped, because both sides are normalized before comparison. Every existing encoding assertion in this repo that relies on route matching alone is therefore passing vacuously. The reliable view is `request.url.raw_path` (bytes, query string appended), which I use via a `_assert_raw_path` helper in the new test file. Worth propagating to the other parity branches.</result>
+<usage><subagent_tokens>300047</subagent_tokens><tool_uses>105</tool_uses><duration_ms>1116661</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a89ca749886ca34ff</worktreePath><worktreeBranch>worktree-agent-a89ca749886ca34ff</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+There is now a ui_api_gaps markdown file in the project root folder that contains a list of undocumented apis I want to add on to the parity set.
+
+---
+
+It’s a throwaway lab environment, even on fossa. Nothing you do will impact production. Experiment away and capture what you need to
+
+---
+
+Endpoint-inference should not go public either. I don’t care if they’re tracked locally, I just don’t want them in the public repository.
