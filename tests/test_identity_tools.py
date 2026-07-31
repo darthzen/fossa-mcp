@@ -34,6 +34,18 @@ def admin_settings() -> Settings:
 
 
 @pytest.fixture
+def full_settings() -> Settings:
+    """Writes, admin, and destructive all on — what the three deletes require."""
+    return Settings(
+        fossa_api_token="test-token",
+        fossa_allow_writes=True,
+        fossa_allow_admin=True,
+        fossa_allow_destructive=True,
+        _env_file=None,  # type: ignore[call-arg]
+    )
+
+
+@pytest.fixture
 def writes_only_settings() -> Settings:
     """Writes enabled, admin still off."""
     return Settings(fossa_api_token="test-token", fossa_allow_writes=True, _env_file=None)  # type: ignore[call-arg]
@@ -244,6 +256,55 @@ async def test_every_write_refuses_when_admin_is_on_but_writes_are_off(
     assert respx_mock.calls.call_count == 0
 
 
+def _deletes(ctx):
+    """The three deletes, which need DESTRUCTIVE on top of ADMIN."""
+    return (
+        identity.delete_oidc_provider(ctx, 42),
+        identity.delete_oidc_trust_relationship(ctx, 99),
+        identity.delete_saml_settings(ctx, 1),
+    )
+
+
+@pytest.mark.asyncio
+async def test_deletes_refuse_when_destructive_is_off_even_with_admin_on(
+    admin_settings, respx_mock, make_context
+):
+    """ADMIN says what kind of thing this is; DESTRUCTIVE says how bad it is wrong.
+
+    Removing an OIDC provider, a trust relationship, or the SAML configuration
+    is irreversible from here, so it needs both. Everything else in the domain
+    still runs on ADMIN alone — see the test below.
+    """
+    assert admin_settings.fossa_allow_destructive is False
+    client = FossaClient(admin_settings)
+    ctx = make_context(client, admin_settings)
+
+    for call in _deletes(ctx):
+        with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_DESTRUCTIVE"):
+            await call
+
+    await client.aclose()
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_non_deletes_do_not_need_the_destructive_tier(
+    admin_settings, respx_mock, make_context
+):
+    """The DESTRUCTIVE requirement is scoped to the deletes, not to the domain."""
+    route = respx_mock.post(f"{BASE}/oidc/providers").mock(
+        return_value=httpx.Response(200, json={"id": 42})
+    )
+
+    client = FossaClient(admin_settings)
+    await identity.create_oidc_provider(
+        make_context(client, admin_settings), "https://token.actions.example"
+    )
+    await client.aclose()
+
+    assert route.calls.call_count == 1
+
+
 # --- OIDC writes -------------------------------------------------------------
 
 
@@ -313,12 +374,12 @@ async def test_create_oidc_provider_rejects_mismatched_scope(
 
 @pytest.mark.asyncio
 async def test_delete_oidc_provider_tolerates_the_empty_204_body(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.delete(f"{BASE}/oidc/providers/42").mock(return_value=httpx.Response(204))
 
-    client = FossaClient(admin_settings)
-    result = await identity.delete_oidc_provider(make_context(client, admin_settings), 42)
+    client = FossaClient(full_settings)
+    result = await identity.delete_oidc_provider(make_context(client, full_settings), 42)
     await client.aclose()
 
     assert route.called
@@ -479,14 +540,14 @@ async def test_update_oidc_trust_relationship_requires_something_to_change(
 
 @pytest.mark.asyncio
 async def test_delete_oidc_trust_relationship_tolerates_the_empty_204_body(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.delete(f"{BASE}/oidc/trust-relationships/99").mock(
         return_value=httpx.Response(204)
     )
 
-    client = FossaClient(admin_settings)
-    result = await identity.delete_oidc_trust_relationship(make_context(client, admin_settings), 99)
+    client = FossaClient(full_settings)
+    result = await identity.delete_oidc_trust_relationship(make_context(client, full_settings), 99)
     await client.aclose()
 
     assert route.called
@@ -679,6 +740,7 @@ async def test_saml_tools_fall_back_to_the_configured_org_id(respx_mock, make_co
         fossa_api_token="test-token",
         fossa_allow_writes=True,
         fossa_allow_admin=True,
+        fossa_allow_destructive=True,
         fossa_org_id=555,
         _env_file=None,  # type: ignore[call-arg]
     )

@@ -11,12 +11,19 @@ who is able to authenticate to FOSSA:
   `cert` breaks every SSO login; deleting them removes the configuration and the
   organization domains that authenticate through it.
 
+**The three deletes require `WriteTier.DESTRUCTIVE` as well.** ADMIN and
+DESTRUCTIVE answer different questions — "what kind of thing is this?" and "how
+bad is it if it is wrong?" — and a delete is destructive regardless of which
+domain it lives in. `require_tier` takes one tier, so those tools call it twice;
+`tools/org_settings.py` set the precedent on `DELETE /organizations/{id}/logo`.
+
 `ADMIN` requires `FOSSA_ALLOW_ADMIN` **and** `FOSSA_ALLOW_WRITES`; neither
-implies the other. Per DECISIONS.md §7 the ADMIN tier should stay off on any
-shared deployment: under §2 this server authenticates no callers and executes
-every request with one shared token, so anyone who can reach the transport
-inherits whatever tiers are on. Turning ADMIN on is turning "anyone who can
-reach this server can change who is able to log in to the organization" on.
+implies the other, and neither implies `FOSSA_ALLOW_DESTRUCTIVE`. Per
+DECISIONS.md §7 the ADMIN tier should stay off on any shared deployment: under
+§2 this server authenticates no callers and executes every request with one
+shared token, so anyone who can reach the transport inherits whatever tiers are
+on. Turning ADMIN on is turning "anyone who can reach this server can change who
+is able to log in to the organization" on.
 
 Two things about this domain that are not obvious from the endpoint list:
 
@@ -311,7 +318,8 @@ async def delete_oidc_provider(ctx: Context, provider_id: int) -> dict[str, Any]
     """
     Delete an OIDC provider and every trust relationship that points at it.
 
-    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true, FOSSA_ALLOW_ADMIN=true,
+    and FOSSA_ALLOW_DESTRUCTIVE=true.
 
     The cascade is the point to be careful about: FOSSA deletes the provider's
     trust relationships with it, so every workload authenticating through this
@@ -327,6 +335,7 @@ async def delete_oidc_provider(ctx: Context, provider_id: int) -> dict[str, Any]
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_delete_oidc_provider")
+    require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_oidc_provider")
 
     # 204 with an empty body: request_json would report the empty body as an
     # error regardless of the status.
@@ -465,7 +474,8 @@ async def delete_oidc_trust_relationship(
     Revoke one OIDC trust relationship, so tokens matching it no longer buy a
     FOSSA login.
 
-    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true, FOSSA_ALLOW_ADMIN=true,
+    and FOSSA_ALLOW_DESTRUCTIVE=true.
 
     This is the revocation path for a leaked or over-broad grant, and it is not
     reversible from here: the audiences and claim rules are gone once deleted.
@@ -480,6 +490,7 @@ async def delete_oidc_trust_relationship(
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_delete_oidc_trust_relationship")
+    require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_oidc_trust_relationship")
 
     # 204 with an empty body.
     body, _ = await client.request_text(
@@ -674,7 +685,8 @@ async def delete_saml_settings(ctx: Context, organization_id: int | None = None)
     """
     Remove the organization's SAML single sign-on configuration entirely.
 
-    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true, FOSSA_ALLOW_ADMIN=true,
+    and FOSSA_ALLOW_DESTRUCTIVE=true.
 
     Every user who signs in through SAML loses that path, and the organization
     domains that authenticate through it go with the configuration. Since the API
@@ -690,6 +702,7 @@ async def delete_saml_settings(ctx: Context, organization_id: int | None = None)
     validated = SamlSettingsDeleteInput(organization_id=_resolve_org_id(settings, organization_id))
 
     require_tier(settings, WriteTier.ADMIN, "fossa_delete_saml_settings")
+    require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_saml_settings")
 
     # Documented as a 200 with no content, so the JSON path would fail parsing it.
     body, _ = await client.request_text(

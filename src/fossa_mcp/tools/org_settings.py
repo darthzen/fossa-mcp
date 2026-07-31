@@ -2,16 +2,26 @@
 
 These are the organization-wide defaults behind FOSSA's settings pages: which
 policies new projects get, whether issue scanning and CI status checks are on,
-the package registries and credentials scans use, notification defaults, and the
-SAML configuration.
+the package registries and credentials scans use, and notification defaults.
+
+The spec tags 59 operations `Organization Settings`. These four tools cover 57
+of them. The other two — `PUT` and `DELETE /organizations/{id}/saml` — are
+`fossa_update_saml_settings` and `fossa_delete_saml_settings` in
+`tools/identity.py`, alongside OIDC, because replacing an organization's single
+sign-on configuration deserves typed `cert` and `entry_point` arguments rather
+than the free-form `values` dict a grouped section tool has to accept. Nothing
+in this module can write or delete the SAML configuration; the `authentication`
+section still *reports* it.
 
 What FOSSA's API actually supports, which is what shapes these tools:
 
-* The domain is 57 operations across 22 sections that differ only by a path
-  segment, so it is grouped rather than one tool per endpoint (DECISIONS.md §7).
-  `fossa_org_settings` reads, `fossa_update_org_settings` writes, and
-  `fossa_delete_org_setting` covers the domain's two deletes. The section names
-  are a closed `Literal` derived from the spec — see `models/org_settings.py`.
+* The 57 operations are 55 across 22 near-identical sections that differ only by
+  a path segment, plus the two organization limit reads, so the domain is
+  grouped rather than one tool per endpoint (DECISIONS.md §7).
+  `fossa_org_settings` reads, `fossa_update_org_settings` writes,
+  `fossa_delete_org_setting` covers the one remaining delete, and
+  `fossa_org_limits` reads the limits. The section names are a closed `Literal`
+  derived from the spec — see `models/org_settings.py`.
 * Every path is `/organizations/{id}/...`, so `FOSSA_ORG_ID` is required rather
   than optional here. `tools/policies.py` can degrade gracefully without it
   because the org lookup is one optional enrichment of a project read; for these
@@ -67,11 +77,11 @@ from ..writes import WriteTier, require_tier
 # Sections whose write is an identity, authentication, or access-control change
 # and therefore needs the ADMIN tier rather than plain WRITE.
 #
-# `authentication` owns the login subdomain and the invite switch; `saml` is the
-# whole SSO configuration. `general` is not listed because only two of its nine
-# keys are access control — it escalates per call instead, in
-# `_required_tiers`.
-_ADMIN_SECTIONS: frozenset[str] = frozenset({"authentication", "saml"})
+# `authentication` owns the login subdomain and the invite switch. `general` is
+# not listed because only two of its nine keys are access control — it escalates
+# per call instead, in `_required_tiers`. The SAML configuration is not a
+# section here at all; see `tools/identity.py`.
+_ADMIN_SECTIONS: frozenset[str] = frozenset({"authentication"})
 
 
 def _org_id(settings: Settings) -> int:
@@ -254,9 +264,9 @@ async def update_org_settings(
       overwrites the named setting on every project in the organization, and
       FOSSA offers no undo, so its target set is unbounded regardless of the
       HTTP verb.
-    * section="authentication" and section="saml" also require
-      FOSSA_ALLOW_ADMIN=true, as does section="general" when `values` carries
-      `defaultRoleId` or `disableNonCustomTeamUserRoles`.
+    * section="authentication" also requires FOSSA_ALLOW_ADMIN=true, as does
+      section="general" when `values` carries `defaultRoleId` or
+      `disableNonCustomTeamUserRoles`.
 
     action="replace" (the default) sends the section's PUT. It REPLACES the
     section rather than merging, so pass the whole section, not just the key
@@ -271,10 +281,10 @@ async def update_org_settings(
     organization defaults to push out. Only the ten "projects-*" sections
     support it, and each accepts its own field list.
 
-    Two writable sections are not readable: "saml" replaces the whole SSO
-    configuration (`entryPoint`, `cert`, and `audience` are required) and is
-    reported back by the "authentication" section, and "sbom-report-defaults"
-    sets the author and supplier stamped into generated SBOMs.
+    One writable section is not readable: "sbom-report-defaults" sets the author
+    and supplier stamped into generated SBOMs. To replace the organization's SAML
+    single sign-on configuration, use fossa_update_saml_settings — it is not a
+    section here.
     """
     validated = OrgSettingsUpdateInput(
         section=section,
@@ -323,17 +333,15 @@ async def delete_org_setting(
     target: OrgSettingsDeleteTarget,
 ) -> dict[str, Any]:
     """
-    Delete a FOSSA organization's SAML configuration or its logo.
+    Delete a FOSSA organization's logo.
 
     WRITES TO FOSSA. Requires FOSSA_ORG_ID, FOSSA_ALLOW_WRITES=true and
-    FOSSA_ALLOW_DESTRUCTIVE=true. target="saml" additionally requires
-    FOSSA_ALLOW_ADMIN=true.
+    FOSSA_ALLOW_DESTRUCTIVE=true.
 
-    target="saml" removes single sign-on for the whole organization. Anyone who
-    signs in through the identity provider and has no other credential loses
-    access until it is reconfigured, and FOSSA offers no undo; the configuration
-    has to be re-entered from the identity provider. target="logo" clears the
-    organization's uploaded logo and nothing else.
+    target="logo" clears the organization's uploaded logo and nothing else. To
+    remove the organization's SAML single sign-on configuration — the other
+    organization-level delete in this part of the API — use
+    fossa_delete_saml_settings.
     """
     validated = OrgSettingsDeleteInput(target=target)
 
@@ -344,10 +352,6 @@ async def delete_org_setting(
     require_tier(
         settings, WriteTier.DESTRUCTIVE, f"fossa_delete_org_setting(target={validated.target!r})"
     )
-    if validated.target == "saml":
-        require_tier(
-            settings, WriteTier.ADMIN, f"fossa_delete_org_setting(target={validated.target!r})"
-        )
 
     org_id = _org_id(settings)
     suffix = ORG_SETTINGS_DELETE_PATHS[validated.target]

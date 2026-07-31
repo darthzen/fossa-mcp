@@ -16,13 +16,19 @@ from .client import FossaClient
 from .config import Settings
 from .tools import (
     dependencies,
+    identity,
+    integrations,
+    inventory,
     issues,
+    labels,
+    org_settings,
     policies,
     posture,
     projects,
     release_groups,
     reports,
     revisions,
+    teams,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,29 +49,48 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
 mcp = FastMCP(
     "FOSSA",
     instructions=(
-        "Access to a FOSSA organization across five domains: projects and their "
-        "settings, revisions and the attribution reports built from them, "
-        "dependencies, issues (licensing, vulnerability, and quality, together "
-        "with the exceptions, disputes, and saved filters around them), and "
-        "release groups. Security policy assignment and evaluation sit on top.\n\n"
-        "Most tools only read. Every tool that changes FOSSA state says so on "
-        "the second line of its description and names the environment variables "
-        "it needs. Writes are tiered and off by default:\n"
-        "- FOSSA_ALLOW_WRITES=true permits creates and updates.\n"
-        "- FOSSA_ALLOW_DESTRUCTIVE=true, which is only effective alongside "
-        "FOSSA_ALLOW_WRITES, additionally permits deletes and the bulk "
+        "Access to a FOSSA organization across most of its API. The domains are: "
+        "projects and their settings; revisions and the attribution reports built "
+        "from them; dependencies and the package inventory behind them; issues "
+        "(licensing, vulnerability, and quality, together with the exceptions, "
+        "disputes, and saved filters around them); release groups; package and "
+        "organization labels; organization settings and plan limits; teams, team "
+        "groups, roles, and users; federated identity (OIDC and SAML); "
+        "integrations (Jira, fossabot, saved report presets, custom risk scores, "
+        "snippet review); and the long-tail reads — binary decomposition, audit "
+        "logs, SBOM sharing, builds, the CVE catalog, and remediation guidance. "
+        "Security policy assignment and evaluation sit on top.\n\n"
+        "Roughly half the tools only read. Every tool that changes FOSSA state "
+        "says so on the second line of its description and names the environment "
+        "variables it needs. Writes are tiered and every tier is off by "
+        "default:\n"
+        "- FOSSA_ALLOW_WRITES=true permits creates and updates. Nothing writes "
+        "without it, whatever else is set.\n"
+        "- FOSSA_ALLOW_DESTRUCTIVE=true additionally permits deletes, the writes "
+        "that replace state wholesale rather than merging into it, and the bulk "
         "operations whose target set is a filter rather than an explicit list.\n"
-        "A tool whose tier is disabled refuses before it constructs a request, "
-        "so nothing reaches FOSSA.\n\n"
-        "Read before you write. The destructive tools act on sets the caller "
-        "cannot see from the arguments alone, and FOSSA has no undo: run "
-        "fossa_list_issues before fossa_update_issues, fossa_get_issue_exceptions "
-        "before fossa_delete_issue_exceptions, fossa_list_projects before "
-        "fossa_delete_projects, and fossa_evaluate_security_policy before "
-        "fossa_enable_security_policy, passing the same arguments each time.\n\n"
-        "Release groups are addressed by numeric id only; there is no "
-        "list-release-groups endpoint, so find the id in the release group's "
-        "FOSSA URL or through fossa_get_project_associations."
+        "- FOSSA_ALLOW_ADMIN=true additionally permits the identity, "
+        "authentication, and access-control writes: teams, team groups, roles, "
+        "service accounts, OIDC, and SAML.\n"
+        "A tool whose tier is disabled refuses before it constructs a request, so "
+        "nothing reaches FOSSA. Some tools need two tiers at once — deleting a "
+        "team needs admin and destructive both — and some decide per call, so the "
+        "same tool can be permitted with one set of arguments and refused with "
+        "another.\n\n"
+        "A tool advertising destructiveHint=true removes state or replaces it "
+        "wholesale, and FOSSA has no undo. Read before you write, passing the "
+        "same arguments each time: fossa_list_issues before fossa_update_issues, "
+        "fossa_get_issue_exceptions before fossa_delete_issue_exceptions, "
+        "fossa_list_projects before fossa_delete_projects, fossa_get_team before "
+        "fossa_update_team_assignments, fossa_org_settings before "
+        "fossa_update_org_settings (its writes replace a section rather than "
+        "merging, so send the whole section), and fossa_evaluate_security_policy "
+        "before fossa_enable_security_policy.\n\n"
+        "Two addressing notes. Release groups are addressed by numeric id only; "
+        "there is no list-release-groups endpoint, so find the id in the release "
+        "group's FOSSA URL or through fossa_get_project_associations. The "
+        "organization settings, limits, and SAML tools address "
+        "/organizations/{id}/... and need FOSSA_ORG_ID set."
     ),
     lifespan=lifespan,
     host=settings.fossa_http_host,
@@ -79,6 +104,16 @@ async def healthz(request: Request) -> PlainTextResponse:
     return PlainTextResponse("ok")
 
 
+# These five constants are the whole annotation vocabulary. Every tool in every
+# domain is registered with one of them, and nothing is annotated inline: the
+# parity branches each invented their own set, the same name meant different
+# things in different branches, and collapsing them here is what stops a client
+# from seeing two tools that behave alike advertise different hints.
+#
+# The axis that decides between them is blast radius, not the HTTP verb — the
+# same rule the write tiers follow (DECISIONS.md §7). A PATCH that rewrites
+# every project in the organization is destructive; a POST that mints one record
+# is not.
 _READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
 # A write that converges. These set named fields on a named target (PUT/PATCH,
@@ -98,7 +133,7 @@ _WRITE = ToolAnnotations(
 # name because DECISIONS.md §5 addresses these two tools specifically.
 _POLICY_WRITE = _WRITE
 
-# A write that accumulates. POSTs that mint a record, queue a background job,
+# A write that accumulates. Calls that mint a record, queue a background job,
 # send mail, or regenerate a URL: the second call is a second dispute, a second
 # export job, a second email — not a no-op — so idempotentHint is False and a
 # client must not retry blindly. They still remove nothing, so destructiveHint
@@ -110,10 +145,17 @@ _WRITE_ACCUMULATING = ToolAnnotations(
     openWorldHint=True,
 )
 
-# Deletes, and only deletes. destructiveHint is reserved for these and for the
-# unbounded-target case below, so that a client treating the hint as a
-# confirmation prompt is prompted where FOSSA offers no undo. Repeating a
-# delete removes nothing further, so idempotentHint is True.
+# Removes state, or replaces it wholesale. Deletes are the obvious members; so
+# are the reconciling PUTs whose body is a desired state and which silently drop
+# whatever it does not mention, and the organization-settings PATCH that
+# overwrites the setting on every project at once. destructiveHint is reserved
+# for these and for the unbounded case below, so that a client treating the hint
+# as a confirmation prompt is prompted wherever FOSSA offers no undo. Repeating
+# the call removes nothing further, so idempotentHint is True.
+#
+# Every tool annotated with this — or with _DESTRUCTIVE_UNBOUNDED — reaches
+# `require_tier(..., WriteTier.DESTRUCTIVE, ...)` on the path that destroys, in
+# addition to any ADMIN requirement. The hint and the gate say the same thing.
 _DESTRUCTIVE = ToolAnnotations(
     readOnlyHint=False,
     destructiveHint=True,
@@ -121,12 +163,11 @@ _DESTRUCTIVE = ToolAnnotations(
     openWorldHint=True,
 )
 
-# The unbounded-target case: fossa_update_issues picks its write tier at call
-# time, acting on named issue_ids (WRITE) or on everything matching the filters
-# (DESTRUCTIVE, per DECISIONS.md §7). A static annotation has to advertise the
-# worse of the two, so destructiveHint is True. idempotentHint is False because
-# the issueException action creates a durable ignore rule, and creating it twice
-# is not the same as creating it once.
+# The above, plus a second call is not a no-op. Two shapes land here: a tool
+# whose target set is a filter rather than a named list and which also creates
+# durable state (fossa_update_issues, whose issueException action writes an
+# ignore rule), and the create/update/delete multiplexers, where a static
+# annotation has to advertise the worst action it can be asked to perform.
 _DESTRUCTIVE_UNBOUNDED = ToolAnnotations(
     readOnlyHint=False,
     destructiveHint=True,
@@ -280,6 +321,202 @@ mcp.tool(name="fossa_enable_security_policy", annotations=_POLICY_WRITE)(
 )
 mcp.tool(name="fossa_assign_security_policy_to_projects", annotations=_POLICY_WRITE)(
     policies.assign_security_policy_to_projects
+)
+
+# --- teams, team groups, roles, and users ------------------------------------
+# FOSSA's access-control surface. Every write is WriteTier.ADMIN; the ones that
+# take something away are additionally WriteTier.DESTRUCTIVE.
+mcp.tool(name="fossa_list_teams", annotations=_READ_ONLY)(teams.list_teams)
+mcp.tool(name="fossa_get_team", annotations=_READ_ONLY)(teams.get_team)
+mcp.tool(name="fossa_list_addable_team_targets", annotations=_READ_ONLY)(
+    teams.list_addable_team_targets
+)
+mcp.tool(name="fossa_get_team_groups", annotations=_READ_ONLY)(teams.get_team_groups)
+mcp.tool(name="fossa_list_roles", annotations=_READ_ONLY)(teams.list_roles)
+mcp.tool(name="fossa_list_users", annotations=_READ_ONLY)(teams.list_users)
+mcp.tool(name="fossa_create_team", annotations=_WRITE_ACCUMULATING)(teams.create_team)
+mcp.tool(name="fossa_update_team", annotations=_WRITE)(teams.update_team)
+mcp.tool(name="fossa_delete_team", annotations=_DESTRUCTIVE)(teams.delete_team)
+# Membership as an action over a list: "replace" sets the collection to exactly
+# what is named and drops the rest, and the projects target accepts "all" or a
+# server-resolved filter.
+mcp.tool(name="fossa_update_team_assignments", annotations=_DESTRUCTIVE)(
+    teams.update_team_assignments
+)
+# Create/update/delete behind one tool, so the annotation advertises delete.
+mcp.tool(name="fossa_manage_team_group", annotations=_DESTRUCTIVE_UNBOUNDED)(
+    teams.manage_team_group
+)
+mcp.tool(name="fossa_update_team_group_assignments", annotations=_DESTRUCTIVE)(
+    teams.update_team_group_assignments
+)
+mcp.tool(name="fossa_manage_role", annotations=_DESTRUCTIVE_UNBOUNDED)(teams.manage_role)
+mcp.tool(name="fossa_create_service_account", annotations=_WRITE_ACCUMULATING)(
+    teams.create_service_account
+)
+
+# --- package labels, label assignments, and organization labels --------------
+mcp.tool(name="fossa_list_package_labels", annotations=_READ_ONLY)(labels.list_package_labels)
+mcp.tool(name="fossa_list_package_label_assignments", annotations=_READ_ONLY)(
+    labels.list_package_label_assignments
+)
+mcp.tool(name="fossa_list_organization_labels", annotations=_READ_ONLY)(
+    labels.list_organization_labels
+)
+mcp.tool(name="fossa_create_package_labels", annotations=_WRITE_ACCUMULATING)(
+    labels.create_package_labels
+)
+mcp.tool(name="fossa_delete_package_labels", annotations=_DESTRUCTIVE)(labels.delete_package_labels)
+mcp.tool(name="fossa_assign_package_labels", annotations=_WRITE_ACCUMULATING)(
+    labels.assign_package_labels
+)
+mcp.tool(name="fossa_bulk_assign_package_label", annotations=_WRITE_ACCUMULATING)(
+    labels.bulk_assign_package_label
+)
+# A reconcile, not an add: the map it is given becomes the whole assignment set
+# and anything absent from it is removed, which is why the verb is misleading.
+mcp.tool(name="fossa_set_package_label_assignments", annotations=_DESTRUCTIVE)(
+    labels.set_package_label_assignments
+)
+mcp.tool(name="fossa_unassign_package_labels", annotations=_DESTRUCTIVE)(
+    labels.unassign_package_labels
+)
+mcp.tool(name="fossa_create_organization_label", annotations=_WRITE_ACCUMULATING)(
+    labels.create_organization_label
+)
+mcp.tool(name="fossa_delete_organization_label", annotations=_DESTRUCTIVE)(
+    labels.delete_organization_label
+)
+
+# --- organization settings and limits ----------------------------------------
+# Grouped: a section name selects the endpoint and an action selects the verb.
+# The SAML operations the spec files under this tag are in the identity group.
+mcp.tool(name="fossa_org_settings", annotations=_READ_ONLY)(org_settings.get_org_settings)
+mcp.tool(name="fossa_org_limits", annotations=_READ_ONLY)(org_settings.get_org_limits)
+# Destructive on two counts: the PUTs replace a section wholesale rather than
+# merging, and action="propagate" pushes the organization default onto every
+# existing project in one call.
+mcp.tool(name="fossa_update_org_settings", annotations=_DESTRUCTIVE)(
+    org_settings.update_org_settings
+)
+mcp.tool(name="fossa_delete_org_setting", annotations=_DESTRUCTIVE)(org_settings.delete_org_setting)
+
+# --- federated identity: OIDC and SAML ---------------------------------------
+# Every write is WriteTier.ADMIN; the three deletes are also DESTRUCTIVE.
+mcp.tool(name="fossa_list_oidc_providers", annotations=_READ_ONLY)(identity.list_oidc_providers)
+mcp.tool(name="fossa_get_oidc_provider", annotations=_READ_ONLY)(identity.get_oidc_provider)
+mcp.tool(name="fossa_list_oidc_provider_service_accounts", annotations=_READ_ONLY)(
+    identity.list_oidc_provider_service_accounts
+)
+mcp.tool(name="fossa_list_oidc_trust_relationships", annotations=_READ_ONLY)(
+    identity.list_oidc_trust_relationships
+)
+mcp.tool(name="fossa_get_oidc_trust_relationship", annotations=_READ_ONLY)(
+    identity.get_oidc_trust_relationship
+)
+mcp.tool(name="fossa_create_oidc_provider", annotations=_WRITE_ACCUMULATING)(
+    identity.create_oidc_provider
+)
+mcp.tool(name="fossa_delete_oidc_provider", annotations=_DESTRUCTIVE)(identity.delete_oidc_provider)
+mcp.tool(name="fossa_create_oidc_trust_relationship", annotations=_WRITE_ACCUMULATING)(
+    identity.create_oidc_trust_relationship
+)
+mcp.tool(name="fossa_update_oidc_trust_relationship", annotations=_WRITE)(
+    identity.update_oidc_trust_relationship
+)
+mcp.tool(name="fossa_delete_oidc_trust_relationship", annotations=_DESTRUCTIVE)(
+    identity.delete_oidc_trust_relationship
+)
+# Mints a live FOSSA API token on every call. The tool redacts it, but the
+# credential exists in FOSSA afterwards, so a retry is a second credential.
+mcp.tool(name="fossa_exchange_oidc_token", annotations=_WRITE_ACCUMULATING)(
+    identity.exchange_oidc_token
+)
+mcp.tool(name="fossa_update_saml_settings", annotations=_WRITE)(identity.update_saml_settings)
+mcp.tool(name="fossa_delete_saml_settings", annotations=_DESTRUCTIVE)(identity.delete_saml_settings)
+
+# --- integrations: Jira, fossabot, report options, risk scores, snippets ------
+mcp.tool(name="fossa_get_jira_configurations", annotations=_READ_ONLY)(
+    integrations.get_jira_configurations
+)
+mcp.tool(name="fossa_get_fossabot_status", annotations=_READ_ONLY)(integrations.get_fossabot_status)
+mcp.tool(name="fossa_list_fossabot_upgrade_prs", annotations=_READ_ONLY)(
+    integrations.list_fossabot_upgrade_prs
+)
+mcp.tool(name="fossa_get_fossabot_upgrade_pr", annotations=_READ_ONLY)(
+    integrations.get_fossabot_upgrade_pr
+)
+mcp.tool(name="fossa_list_report_options", annotations=_READ_ONLY)(integrations.list_report_options)
+mcp.tool(name="fossa_list_snippets", annotations=_READ_ONLY)(integrations.list_snippets)
+mcp.tool(name="fossa_get_snippet", annotations=_READ_ONLY)(integrations.get_snippet)
+mcp.tool(name="fossa_save_jira_configuration", annotations=_WRITE_ACCUMULATING)(
+    integrations.save_jira_configuration
+)
+mcp.tool(name="fossa_delete_jira_configuration", annotations=_DESTRUCTIVE)(
+    integrations.delete_jira_configuration
+)
+mcp.tool(name="fossa_request_fossabot_upgrade_pr", annotations=_WRITE_ACCUMULATING)(
+    integrations.request_fossabot_upgrade_pr
+)
+mcp.tool(name="fossa_save_report_option", annotations=_WRITE_ACCUMULATING)(
+    integrations.save_report_option
+)
+mcp.tool(name="fossa_delete_report_option", annotations=_DESTRUCTIVE)(
+    integrations.delete_report_option
+)
+mcp.tool(name="fossa_set_custom_risk_score", annotations=_WRITE_ACCUMULATING)(
+    integrations.set_custom_risk_score
+)
+mcp.tool(name="fossa_delete_custom_risk_score", annotations=_DESTRUCTIVE)(
+    integrations.delete_custom_risk_score
+)
+# Takes a filter, not a list: path="/" alone suppresses every snippet match in
+# the revision, so the tier is picked at call time and the hint advertises the
+# worse branch.
+mcp.tool(name="fossa_set_snippet_rejection", annotations=_DESTRUCTIVE)(
+    integrations.set_snippet_rejection
+)
+
+# --- inventory: binaries, packages, components, audit, SBOM, builds, vulns ----
+mcp.tool(name="fossa_binary_components", annotations=_READ_ONLY)(inventory.binary_components)
+mcp.tool(name="fossa_binary_dependency_confidence", annotations=_READ_ONLY)(
+    inventory.binary_dependency_confidence
+)
+mcp.tool(name="fossa_binary_revision_detail", annotations=_READ_ONLY)(
+    inventory.binary_revision_detail
+)
+mcp.tool(name="fossa_list_packages", annotations=_READ_ONLY)(inventory.list_packages)
+mcp.tool(name="fossa_package_observability", annotations=_READ_ONLY)(
+    inventory.package_observability
+)
+mcp.tool(name="fossa_export_package_index", annotations=_READ_ONLY)(inventory.export_package_index)
+mcp.tool(name="fossa_get_component_upload_url", annotations=_READ_ONLY)(
+    inventory.get_component_upload_url
+)
+mcp.tool(name="fossa_get_audit_logs", annotations=_READ_ONLY)(inventory.get_audit_logs)
+mcp.tool(name="fossa_get_sbom_sharing", annotations=_READ_ONLY)(inventory.get_sbom_sharing)
+mcp.tool(name="fossa_get_builds", annotations=_READ_ONLY)(inventory.get_builds)
+mcp.tool(name="fossa_search_cves", annotations=_READ_ONLY)(inventory.search_cves)
+mcp.tool(name="fossa_get_vulnerability_remediation", annotations=_READ_ONLY)(
+    inventory.get_vulnerability_remediation
+)
+mcp.tool(name="fossa_get_cli_organization", annotations=_READ_ONLY)(inventory.get_cli_organization)
+mcp.tool(name="fossa_get_github_app_installation_url", annotations=_READ_ONLY)(
+    inventory.get_github_app_installation_url
+)
+# A read in intent, but a PURL FOSSA has not analyzed yet is queued for a build.
+mcp.tool(name="fossa_resolve_purls", annotations=_WRITE_ACCUMULATING)(inventory.resolve_purls)
+mcp.tool(name="fossa_build_component", annotations=_WRITE_ACCUMULATING)(inventory.build_component)
+mcp.tool(name="fossa_export_audit_logs", annotations=_WRITE_ACCUMULATING)(
+    inventory.export_audit_logs
+)
+mcp.tool(name="fossa_share_sbom_revision", annotations=_WRITE_ACCUMULATING)(
+    inventory.share_sbom_revision
+)
+# Unconcluding removes a conclusion, and concluding at organization scope
+# re-licenses a dependency for every project in one call.
+mcp.tool(name="fossa_set_license_conclusion", annotations=_DESTRUCTIVE)(
+    inventory.set_license_conclusion
 )
 
 

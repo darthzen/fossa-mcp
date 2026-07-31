@@ -6,8 +6,11 @@ receives, the exact JSON body each write sends, and the refusal path that must
 fire before any request leaves the process when a tool's write tier is off.
 
 Every write in this domain is `WriteTier.ADMIN`, so each one has two refusal
-cases rather than one: writes off entirely, and writes on with admin off. Both
-must make zero HTTP calls.
+cases rather than one: writes off entirely, and writes on with admin off. The
+calls that take something away — the delete, the `delete` action of the two
+manage_* tools, and any assignment call that removes or replaces — have a third,
+with writes and admin on and `FOSSA_ALLOW_DESTRUCTIVE` off. All of them must
+make zero HTTP calls.
 """
 
 import json
@@ -41,10 +44,23 @@ def writable_settings() -> Settings:
 
 @pytest.fixture
 def admin_settings() -> Settings:
+    """Writes and admin on, destructive off — enough for every write that adds."""
     return Settings(
         fossa_api_token="test-token",
         fossa_allow_writes=True,
         fossa_allow_admin=True,
+        _env_file=None,  # type: ignore[call-arg]
+    )
+
+
+@pytest.fixture
+def full_settings() -> Settings:
+    """All three flags on — what the deletes and the removing assignments need."""
+    return Settings(
+        fossa_api_token="test-token",
+        fossa_allow_writes=True,
+        fossa_allow_admin=True,
+        fossa_allow_destructive=True,
         _env_file=None,  # type: ignore[call-arg]
     )
 
@@ -343,13 +359,11 @@ async def test_update_team_rejects_setting_and_clearing_the_same_field(
 
 
 @pytest.mark.asyncio
-async def test_delete_team_tolerates_an_empty_success_body(
-    admin_settings, respx_mock, make_context
-):
+async def test_delete_team_tolerates_an_empty_success_body(full_settings, respx_mock, make_context):
     route = respx_mock.delete(f"{BASE}/teams/{TEAM_ID}").mock(return_value=httpx.Response(200))
 
-    client = FossaClient(admin_settings)
-    result = await teams.delete_team(make_context(client, admin_settings), TEAM_ID)
+    client = FossaClient(full_settings)
+    result = await teams.delete_team(make_context(client, full_settings), TEAM_ID)
     await client.aclose()
 
     assert route.called
@@ -382,15 +396,15 @@ async def test_update_team_assignments_users(admin_settings, respx_mock, make_co
 
 @pytest.mark.asyncio
 async def test_update_team_assignments_users_omits_role_id_on_remove(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.put(f"{BASE}/teams/{TEAM_ID}/users").mock(
         return_value=httpx.Response(200, json={"id": TEAM_ID, "users": []})
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     await teams.update_team_assignments(
-        make_context(client, admin_settings), TEAM_ID, "users", "remove", users=[{"id": USER_ID}]
+        make_context(client, full_settings), TEAM_ID, "users", "remove", users=[{"id": USER_ID}]
     )
     await client.aclose()
 
@@ -442,15 +456,15 @@ async def test_update_team_assignments_projects_by_locator(
 
 @pytest.mark.asyncio
 async def test_update_team_assignments_projects_all_sends_the_literal_string(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.put(f"{BASE}/teams/{TEAM_ID}/projects").mock(
         return_value=httpx.Response(200, json={"id": TEAM_ID, "projects": []})
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     await teams.update_team_assignments(
-        make_context(client, admin_settings), TEAM_ID, "projects", "add", all_projects=True
+        make_context(client, full_settings), TEAM_ID, "projects", "add", all_projects=True
     )
     await client.aclose()
 
@@ -458,14 +472,14 @@ async def test_update_team_assignments_projects_all_sends_the_literal_string(
 
 
 @pytest.mark.asyncio
-async def test_update_team_assignments_projects_by_filter(admin_settings, respx_mock, make_context):
+async def test_update_team_assignments_projects_by_filter(full_settings, respx_mock, make_context):
     route = respx_mock.put(f"{BASE}/teams/{TEAM_ID}/projects").mock(
         return_value=httpx.Response(200, json={"id": TEAM_ID, "projects": []})
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     await teams.update_team_assignments(
-        make_context(client, admin_settings),
+        make_context(client, full_settings),
         TEAM_ID,
         "projects",
         "replace",
@@ -541,15 +555,15 @@ async def test_update_team_assignments_release_groups_add_posts(
 
 @pytest.mark.asyncio
 async def test_update_team_assignments_release_groups_remove_deletes_with_a_body(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.delete(f"{BASE}/teams/{TEAM_ID}/release-groups").mock(
         return_value=httpx.Response(200, json={"id": TEAM_ID, "releaseGroups": []})
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     result = await teams.update_team_assignments(
-        make_context(client, admin_settings),
+        make_context(client, full_settings),
         TEAM_ID,
         "release_groups",
         "remove",
@@ -665,15 +679,15 @@ async def test_manage_team_group_update_requires_both_fields(
 
 @pytest.mark.asyncio
 async def test_manage_team_group_delete_tolerates_an_empty_body(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.delete(f"{BASE}/teams/groups/{TEAM_GROUP_ID}").mock(
         return_value=httpx.Response(200)
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     result = await teams.manage_team_group(
-        make_context(client, admin_settings), "delete", team_group_id=TEAM_GROUP_ID
+        make_context(client, full_settings), "delete", team_group_id=TEAM_GROUP_ID
     )
     await client.aclose()
 
@@ -704,7 +718,7 @@ async def test_update_team_group_assignments_adds_teams(admin_settings, respx_mo
 
 @pytest.mark.asyncio
 async def test_update_team_group_assignments_removes_teams_one_request_each(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     first = respx_mock.delete(f"{BASE}/teams/groups/{TEAM_GROUP_ID}/teams/{TEAM_ID}").mock(
         return_value=httpx.Response(204)
@@ -713,9 +727,9 @@ async def test_update_team_group_assignments_removes_teams_one_request_each(
         return_value=httpx.Response(204)
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     result = await teams.update_team_group_assignments(
-        make_context(client, admin_settings),
+        make_context(client, full_settings),
         TEAM_GROUP_ID,
         "teams",
         "remove",
@@ -731,15 +745,15 @@ async def test_update_team_group_assignments_removes_teams_one_request_each(
 
 @pytest.mark.asyncio
 async def test_update_team_group_assignments_replaces_users(
-    admin_settings, respx_mock, make_context
+    full_settings, respx_mock, make_context
 ):
     route = respx_mock.put(f"{BASE}/teams/groups/{TEAM_GROUP_ID}/users").mock(
         return_value=httpx.Response(200, json={"id": TEAM_GROUP_ID, "users": []})
     )
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     result = await teams.update_team_group_assignments(
-        make_context(client, admin_settings),
+        make_context(client, full_settings),
         TEAM_GROUP_ID,
         "users",
         "replace",
@@ -849,13 +863,11 @@ async def test_manage_role_update_rejects_a_scope_change(admin_settings, respx_m
 
 
 @pytest.mark.asyncio
-async def test_manage_role_delete_tolerates_an_empty_body(admin_settings, respx_mock, make_context):
+async def test_manage_role_delete_tolerates_an_empty_body(full_settings, respx_mock, make_context):
     route = respx_mock.delete(f"{BASE}/roles/{ROLE_ID}").mock(return_value=httpx.Response(200))
 
-    client = FossaClient(admin_settings)
-    result = await teams.manage_role(
-        make_context(client, admin_settings), "delete", role_id=ROLE_ID
-    )
+    client = FossaClient(full_settings)
+    result = await teams.manage_role(make_context(client, full_settings), "delete", role_id=ROLE_ID)
     await client.aclose()
 
     assert route.called
@@ -978,6 +990,9 @@ async def test_create_service_account_requires_a_role_or_a_team(
 # Every write in this domain is ADMIN, so each one is refused twice: once with
 # writes off entirely, and once with writes on but admin off. Neither may make
 # an HTTP call.
+#
+# The calls that take something away need DESTRUCTIVE on top of ADMIN, so those
+# are refused a third time, with writes and admin on and destructive off.
 
 
 def _write_calls(ctx):
@@ -1028,3 +1043,85 @@ async def test_every_write_refuses_when_admin_is_off(writable_settings, respx_mo
 
     assert len(calls) == 8
     assert respx_mock.calls.call_count == 0
+
+
+def _destructive_calls(ctx):
+    """Every call in the domain that can take something away.
+
+    Deleting a team, a team group, or a role removes the object outright. The
+    two assignment tools qualify whenever the action is "remove" or "replace",
+    and `fossa_update_team_assignments` qualifies as well on an unbounded
+    projects target, where FOSSA resolves the target set server-side and the
+    number of projects touched is not knowable from the arguments.
+    """
+    return [
+        lambda: teams.delete_team(ctx, TEAM_ID),
+        lambda: teams.manage_team_group(ctx, "delete", team_group_id=TEAM_GROUP_ID),
+        lambda: teams.manage_role(ctx, "delete", role_id=ROLE_ID),
+        lambda: teams.update_team_assignments(
+            ctx, TEAM_ID, "users", "remove", users=[{"id": USER_ID}]
+        ),
+        lambda: teams.update_team_assignments(ctx, TEAM_ID, "projects", "add", all_projects=True),
+        lambda: teams.update_team_assignments(
+            ctx, TEAM_ID, "projects", "add", project_filters={"title": "widget"}
+        ),
+        lambda: teams.update_team_group_assignments(
+            ctx, TEAM_GROUP_ID, "teams", "remove", team_ids=[TEAM_ID]
+        ),
+        lambda: teams.update_team_group_assignments(
+            ctx, TEAM_GROUP_ID, "users", "replace", users=[{"id": USER_ID, "roleId": 2}]
+        ),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_taking_something_away_refuses_when_destructive_is_off(
+    admin_settings, respx_mock, make_context
+):
+    """ADMIN is not enough for the calls that remove state.
+
+    ADMIN and DESTRUCTIVE answer different questions — "what kind of thing is
+    this?" and "how bad is it if it is wrong?" — so a delete in this domain
+    needs both, exactly as a delete anywhere else does.
+    """
+    assert admin_settings.fossa_allow_destructive is False
+    client = FossaClient(admin_settings)
+    calls = _destructive_calls(make_context(client, admin_settings))
+
+    for call in calls:
+        with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_DESTRUCTIVE"):
+            await call()
+
+    await client.aclose()
+
+    assert len(calls) == 8
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_adding_does_not_need_the_destructive_tier(admin_settings, respx_mock, make_context):
+    """The DESTRUCTIVE requirement is scoped to what it says, not to the domain.
+
+    A bounded "add" on either assignment tool still runs on ADMIN alone, which
+    is what keeps the extra gate from turning into "team management requires
+    FOSSA_ALLOW_DESTRUCTIVE".
+    """
+    team_route = respx_mock.put(f"{BASE}/teams/{TEAM_ID}/users").mock(
+        return_value=httpx.Response(200, json=TEAM_BODY)
+    )
+    group_route = respx_mock.post(f"{BASE}/teams/groups/{TEAM_GROUP_ID}/teams").mock(
+        return_value=httpx.Response(200, json={"id": TEAM_GROUP_ID})
+    )
+
+    client = FossaClient(admin_settings)
+    ctx = make_context(client, admin_settings)
+    await teams.update_team_assignments(
+        ctx, TEAM_ID, "users", "add", users=[{"id": USER_ID, "roleId": 2}]
+    )
+    await teams.update_team_group_assignments(
+        ctx, TEAM_GROUP_ID, "teams", "add", team_ids=[TEAM_ID]
+    )
+    await client.aclose()
+
+    assert team_route.calls.call_count == 1
+    assert group_route.calls.call_count == 1

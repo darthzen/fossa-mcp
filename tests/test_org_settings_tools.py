@@ -104,9 +104,25 @@ def test_the_only_read_only_section_is_slack():
     assert read_only == {"integrations-slack"}
 
 
-def test_the_only_write_only_sections_are_saml_and_sbom_defaults():
+def test_the_only_write_only_section_is_sbom_defaults():
+    """`saml` used to be the other one; it moved to tools/identity.py."""
     write_only = _literal_members(OrgSettingsWritableSection) - _literal_members(OrgSettingsSection)
-    assert write_only == {"saml", "sbom-report-defaults"}
+    assert write_only == {"sbom-report-defaults"}
+
+
+def test_saml_is_not_reachable_from_the_org_settings_tools():
+    """PUT and DELETE /organizations/{id}/saml belong to tools/identity.py.
+
+    Both agents that built this parity surface claimed them, because the spec
+    tags them `Organization Settings`. The dedicated tools won: typed `cert` and
+    `entry_point` arguments beat a free-form `values` dict for a configuration
+    that decides who can log in. This pins the de-duplication so a future
+    spec-derived regeneration cannot quietly hand SAML back to the grouped tool.
+    """
+    assert "saml" not in _literal_members(OrgSettingsWritableSection)
+    assert "saml" not in _literal_members(OrgSettingsDeleteTarget)
+    assert "saml" not in ORG_SETTINGS_WRITE_SECTIONS
+    assert "saml" not in ORG_SETTINGS_DELETE_PATHS
 
 
 def test_notifications_propagates_fewer_fields_than_it_accepts():
@@ -521,28 +537,25 @@ async def test_propagate_sends_the_field_list_as_a_bare_array(
 
 
 @pytest.mark.asyncio
-async def test_replace_saml_requires_admin_and_uses_the_saml_path(
+async def test_replace_an_admin_section_succeeds_once_admin_is_enabled(
     admin_settings, respx_mock, make_context
 ):
-    route = respx_mock.put(f"{ORG}/saml").mock(
-        return_value=httpx.Response(200, json={"id": 9, "audience": "https://acme.example"})
+    """The ADMIN happy path. `saml` used to stand in for this; it moved out."""
+    route = respx_mock.put(f"{ORG}/settings/authentication").mock(
+        return_value=httpx.Response(200, json={"subdomain": "acme", "disableInvite": True})
     )
 
-    body = {
-        "entryPoint": "https://idp.example/sso",
-        "cert": "MIIC...",
-        "audience": "https://acme.example",
-    }
+    body = {"subdomain": "acme", "disableInvite": True}
 
     client = FossaClient(admin_settings)
     result = await org_settings.update_org_settings(
-        make_context(client, admin_settings), "saml", values=body
+        make_context(client, admin_settings), "authentication", values=body
     )
     await client.aclose()
 
     assert respx_mock.calls.call_count == 1
     assert _body(route.calls.last.request) == body
-    assert result["endpoint"] == "PUT /organizations/{id}/saml"
+    assert result["endpoint"] == "PUT /organizations/{id}/settings/authentication"
 
 
 @pytest.mark.asyncio
@@ -582,11 +595,11 @@ async def test_delete_logo(destructive_settings, respx_mock, make_context):
 
 
 @pytest.mark.asyncio
-async def test_delete_saml_tolerates_an_empty_body(full_settings, respx_mock, make_context):
-    respx_mock.delete(f"{ORG}/saml").mock(return_value=httpx.Response(204))
+async def test_delete_logo_tolerates_an_empty_body(full_settings, respx_mock, make_context):
+    respx_mock.delete(f"{ORG}/logo").mock(return_value=httpx.Response(204))
 
     client = FossaClient(full_settings)
-    result = await org_settings.delete_org_setting(make_context(client, full_settings), "saml")
+    result = await org_settings.delete_org_setting(make_context(client, full_settings), "logo")
     await client.aclose()
 
     assert respx_mock.calls.call_count == 1
@@ -624,26 +637,6 @@ async def test_admin_section_is_not_reachable_through_the_write_tier(
             make_context(client, writable_settings),
             "authentication",
             values={"disableInvite": True},
-        )
-    await client.aclose()
-
-    assert respx_mock.calls.call_count == 0
-
-
-@pytest.mark.asyncio
-async def test_saml_replace_is_not_reachable_through_the_write_tier(
-    writable_settings, respx_mock, make_context
-):
-    client = FossaClient(writable_settings)
-    with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_ADMIN"):
-        await org_settings.update_org_settings(
-            make_context(client, writable_settings),
-            "saml",
-            values={
-                "entryPoint": "https://idp.example/sso",
-                "cert": "MIIC...",
-                "audience": "https://acme.example",
-            },
         )
     await client.aclose()
 
@@ -696,19 +689,6 @@ async def test_delete_with_destructive_off_refuses_before_requesting(
 
 
 @pytest.mark.asyncio
-async def test_delete_saml_needs_admin_as_well_as_destructive(
-    destructive_settings, respx_mock, make_context
-):
-    """Destructive alone is not enough: removing SSO is also an identity change."""
-    client = FossaClient(destructive_settings)
-    with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_ADMIN"):
-        await org_settings.delete_org_setting(make_context(client, destructive_settings), "saml")
-    await client.aclose()
-
-    assert respx_mock.calls.call_count == 0
-
-
-@pytest.mark.asyncio
 async def test_every_tier_refuses_when_writes_are_off(
     org_settings_config, respx_mock, make_context
 ):
@@ -719,7 +699,7 @@ async def test_every_tier_refuses_when_writes_are_off(
 
     client = FossaClient(half_configured)
     with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_WRITES"):
-        await org_settings.delete_org_setting(make_context(client, half_configured), "saml")
+        await org_settings.delete_org_setting(make_context(client, half_configured), "logo")
     with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_WRITES"):
         await org_settings.update_org_settings(
             make_context(client, half_configured),

@@ -5,6 +5,14 @@ team can see, and what a role lets its holders do. Every write here is
 `WriteTier.ADMIN` — the tier exists for exactly this domain — and needs
 `FOSSA_ALLOW_WRITES=true` *and* `FOSSA_ALLOW_ADMIN=true`. Reads are ungated.
 
+The writes that take something away need `FOSSA_ALLOW_DESTRUCTIVE=true` on top
+of that: deleting a team, and the `delete` action of `fossa_manage_team_group`
+and `fossa_manage_role`, and any assignment call that removes or replaces rather
+than adds. ADMIN and DESTRUCTIVE answer different questions — "what kind of
+thing is this?" and "how bad is it if it is wrong?" — and a delete is
+destructive regardless of which domain it lives in. `require_tier` takes one
+tier, so those tools call it twice.
+
 What FOSSA's API actually supports, which is what shapes these tools:
 
 * **Everything is addressed by a numeric id.** Teams, team groups, roles, and
@@ -399,7 +407,8 @@ async def delete_team(
     """
     Delete a FOSSA team.
 
-    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true, FOSSA_ALLOW_ADMIN=true,
+    and FOSSA_ALLOW_DESTRUCTIVE=true.
 
     This removes the team from every team group it belongs to and drops all of
     its associations: its members lose the access the team granted them, and its
@@ -414,6 +423,7 @@ async def delete_team(
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_delete_team")
+    require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_delete_team")
 
     await _request_tolerating_empty_body(client, "DELETE", f"/teams/{validated.team_id}")
 
@@ -440,6 +450,9 @@ async def update_team_assignments(
     release groups.
 
     WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    Any call that can take an assignment away — action "remove" or "replace", or
+    a projects call using `all_projects` or `project_filters` — additionally
+    requires FOSSA_ALLOW_DESTRUCTIVE=true. A bounded "add" does not.
 
     `target` picks the collection and decides which of the remaining arguments
     apply; passing one that belongs to a different target is rejected before any
@@ -483,6 +496,8 @@ async def update_team_assignments(
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_update_team_assignments")
+    if validated.takes_assignments_away:
+        require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_update_team_assignments")
 
     if validated.target == "users":
         payload: dict[str, Any] = {
@@ -574,6 +589,7 @@ async def manage_team_group(
     Create, rename, or delete a FOSSA team group.
 
     WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    action="delete" additionally requires FOSSA_ALLOW_DESTRUCTIVE=true.
 
     A team group has only two editable fields, so one tool covers all three
     actions rather than three near-identical ones. "create" needs `name` and
@@ -598,6 +614,8 @@ async def manage_team_group(
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_manage_team_group")
+    if validated.action == "delete":
+        require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_manage_team_group(action='delete')")
 
     if validated.action == "delete":
         await _request_tolerating_empty_body(
@@ -640,6 +658,8 @@ async def update_team_group_assignments(
     members.
 
     WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    action "remove" and action "replace" additionally require
+    FOSSA_ALLOW_DESTRUCTIVE=true, because both take an existing assignment away.
 
     * "teams" takes `team_ids` and supports add and remove. FOSSA removes teams
       one at a time, so a remove naming several teams issues one request per
@@ -667,6 +687,8 @@ async def update_team_group_assignments(
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_update_team_group_assignments")
+    if validated.takes_assignments_away:
+        require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_update_team_group_assignments")
 
     if validated.target == "users":
         payload: dict[str, Any] = {
@@ -770,6 +792,7 @@ async def manage_role(
     Create, update, or delete a custom FOSSA role.
 
     WRITES TO FOSSA. Requires FOSSA_ALLOW_WRITES=true and FOSSA_ALLOW_ADMIN=true.
+    action="delete" additionally requires FOSSA_ALLOW_DESTRUCTIVE=true.
 
     A role is a scope plus a permission list, so the three actions share one
     shape and one tool. "create" needs `scope` ("organization" or "team"),
@@ -805,6 +828,8 @@ async def manage_role(
     settings: Settings = lifespan_ctx["settings"]
 
     require_tier(settings, WriteTier.ADMIN, "fossa_manage_role")
+    if validated.action == "delete":
+        require_tier(settings, WriteTier.DESTRUCTIVE, "fossa_manage_role(action='delete')")
 
     if validated.action == "delete":
         await _request_tolerating_empty_body(client, "DELETE", f"/roles/{validated.role_id}")

@@ -1,11 +1,17 @@
 """Input models for the organization settings and organization limits tools.
 
-Organization Settings is 57 FOSSA operations across 22 near-identical
+Organization Settings is 55 FOSSA operations across 22 near-identical
 `get`/`put`/`patch` triples that differ only by the section name in the path.
-Exposed one-to-one that would be 57 tools for one page of the FOSSA web app, so
+Exposed one-to-one that would be 55 tools for one page of the FOSSA web app, so
 the domain is grouped: a section name selects the endpoint, and an action
 selects the verb (see API_PARITY_PLAN.md, "Tool shape: tiered hybrid", and
 DECISIONS.md §7).
+
+The spec files two more operations under the same tag — `PUT` and `DELETE`
+`/organizations/{id}/saml` — and they are deliberately absent from every
+`Literal` here. They are covered by `fossa_update_saml_settings` and
+`fossa_delete_saml_settings` in `tools/identity.py`, which take typed `cert` and
+`entry_point` arguments instead of a free-form `values` dict.
 
 Grouping only stays safe if the section is closed. Every `Literal` and every
 table below is derived mechanically from `spec/fossa-openapi.json` by
@@ -53,12 +59,14 @@ OrgSettingsSection = Literal[
     "projects-update-hooks",
 ]
 
-# The 23 writable sections: the 21 readable sections that also accept a `PUT`
-# (`integrations-slack` is read-only in the API), plus two org-level
-# configuration endpoints that sit outside `/settings/` but belong to the same
-# page of the product — `saml` and `sbom-report-defaults`. `saml` has no `GET`,
-# so it is writable-only; the SAML state it produces is reported by the
-# `authentication` section instead.
+# The 22 writable sections: the 21 readable sections that also accept a `PUT`
+# (`integrations-slack` is read-only in the API), plus `sbom-report-defaults`, an
+# org-level configuration endpoint that sits outside `/settings/` but belongs to
+# the same page of the product and has no `GET`.
+#
+# `saml` is the other such endpoint and is deliberately not here: it is covered
+# by `fossa_update_saml_settings` in `tools/identity.py`. The SAML state it
+# produces is still reported by the `authentication` section.
 OrgSettingsWritableSection = Literal[
     "authentication",
     "general",
@@ -81,7 +89,6 @@ OrgSettingsWritableSection = Literal[
     "projects-privacy",
     "projects-quick-import-scan-methods",
     "projects-update-hooks",
-    "saml",
     "sbom-report-defaults",
 ]
 
@@ -90,8 +97,10 @@ OrgSettingsWritableSection = Literal[
 # down onto every existing project, overwriting per-project values.
 OrgSettingsAction = Literal["replace", "propagate"]
 
-# The only two organization-level configuration deletes in the API.
-OrgSettingsDeleteTarget = Literal["saml", "logo"]
+# The API has two organization-level configuration deletes. The other one,
+# `DELETE /organizations/{id}/saml`, is `fossa_delete_saml_settings` in
+# `tools/identity.py`.
+OrgSettingsDeleteTarget = Literal["logo"]
 
 OrgLimit = Literal["contributors", "release-groups"]
 
@@ -130,7 +139,6 @@ ORG_LIMIT_PATHS: dict[str, str] = {
 }
 
 ORG_SETTINGS_DELETE_PATHS: dict[str, str] = {
-    "saml": "/saml",
     "logo": "/logo",
 }
 
@@ -321,19 +329,6 @@ ORG_SETTINGS_WRITE_SECTIONS: dict[str, WritableSection] = {
             "updateHookDefaultScheduledIntervalLength",
             "updateHookDefaultScheduledIntervalTime",
         ),
-    ),
-    "saml": WritableSection(
-        path="/saml",
-        body="object",
-        keys=(
-            "entryPoint",
-            "cert",
-            "audience",
-            "orgRoleManagement",
-            "teamRoleManagement",
-            "createMissingTeams",
-        ),
-        required=("entryPoint", "cert", "audience"),
     ),
     "sbom-report-defaults": WritableSection(
         path="/sbomReportDefaults",

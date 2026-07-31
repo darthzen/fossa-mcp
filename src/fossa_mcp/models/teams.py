@@ -295,6 +295,20 @@ class TeamAssignmentInput(BaseModel):
     project_filters: TeamProjectFilters | None = None
     release_group_ids: list[int] | None = None
 
+    @property
+    def takes_assignments_away(self) -> bool:
+        """True when this call can remove an assignment the team already has.
+
+        "remove" takes named assignments away and "replace" sets the collection
+        to exactly what is named, dropping everything else. `all_projects` and
+        `project_filters` resolve server-side, so the number of projects the
+        call touches is not knowable from the arguments — the unbounded-target
+        case the DESTRUCTIVE tier exists for. Only a bounded "add" is exempt.
+        """
+        if self.action in ("remove", "replace"):
+            return True
+        return self.all_projects or self.project_filters is not None
+
     @model_validator(mode="after")
     def _check_target_fields(self) -> "TeamAssignmentInput":
         project_fields = (
@@ -410,6 +424,15 @@ class TeamGroupAssignmentInput(BaseModel):
     action: AssignmentAction
     team_ids: list[int] | None = None
     users: list[UserAssignment] | None = None
+
+    @property
+    def takes_assignments_away(self) -> bool:
+        """True when this call can remove an assignment the group already has.
+
+        Every target here names an explicit list, so there is no unbounded case
+        to consider — only the action matters.
+        """
+        return self.action in ("remove", "replace")
 
     @model_validator(mode="after")
     def _check_target_fields(self) -> "TeamGroupAssignmentInput":
