@@ -203,6 +203,36 @@ class PostureInput(BaseModel):
     top_issue_count: int = Field(default=10, ge=1, le=25)
 
 
+class SecurityPolicyReadInput(BaseModel):
+    """Input model for fossa_get_security_policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_locator: str = Field(min_length=1)
+
+
+class PolicyEvaluateInput(BaseModel):
+    """Input model for fossa_evaluate_security_policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_locator: str = Field(min_length=1)
+    revision_locator: str = Field(min_length=1)
+    depths: list[DependencyDepth] | None = None
+    count: int = Field(default=100, ge=1)
+
+
+class PolicyEnableInput(BaseModel):
+    """Input model for fossa_enable_security_policy."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_locator: str = Field(min_length=1)
+    security_policy_id: int = Field(ge=1)
+    enable_scanning: bool = True
+    enable_status_check: bool = True
+
+
 class AttributionReportInput(BaseModel):
     """Input model for fossa_get_attribution_report."""
 

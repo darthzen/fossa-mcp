@@ -34,6 +34,41 @@ class Settings(BaseSettings):
         description="Maximum characters in attribution reports",
     )
 
+    # Policy enforcement
+    fossa_policy_file: str | None = Field(
+        default=None,
+        description="Path to the local security policy overlay file (JSON)",
+    )
+    fossa_org_id: int | None = Field(
+        default=None,
+        description="FOSSA organization ID, required by the organization settings endpoints",
+    )
+    # Write gating is tiered, not one flag. Each tier is a strict superset of the
+    # risk below it, and each must be enabled independently — enabling writes
+    # never implies destructive, and destructive never implies admin.
+    fossa_allow_writes: bool = Field(
+        default=False,
+        description=(
+            "Permit tools that create or update FOSSA state. Off by default: every "
+            "write tool refuses before issuing a request unless this is enabled."
+        ),
+    )
+    fossa_allow_destructive: bool = Field(
+        default=False,
+        description=(
+            "Permit tools that delete FOSSA state or act on an unbounded set of "
+            "targets. Requires fossa_allow_writes as well."
+        ),
+    )
+    fossa_allow_admin: bool = Field(
+        default=False,
+        description=(
+            "Permit tools that change identity, authentication, or access control "
+            "(SAML, OIDC, roles, service accounts, team membership). Requires "
+            "fossa_allow_writes as well."
+        ),
+    )
+
     # Logging
     fossa_log_level: str = Field(default="INFO", description="Log level for the application")
 
@@ -72,6 +107,15 @@ class Settings(BaseSettings):
         looks like a bad token rather than a bad newline. An empty or
         whitespace-only value is treated as absent.
         """
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
+    @field_validator("fossa_policy_file")
+    @classmethod
+    def _normalize_policy_file(cls, value: str | None) -> str | None:
+        """Treat an empty or whitespace-only path as absent, like the token."""
         if value is None:
             return None
         stripped = value.strip()

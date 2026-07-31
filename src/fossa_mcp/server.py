@@ -14,7 +14,7 @@ from starlette.responses import PlainTextResponse
 from . import __version__
 from .client import FossaClient
 from .config import Settings
-from .tools import dependencies, issues, posture, projects, reports, revisions
+from .tools import dependencies, issues, policies, posture, projects, reports, revisions
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +34,15 @@ async def lifespan(server: FastMCP) -> AsyncIterator[dict[str, Any]]:
 mcp = FastMCP(
     "FOSSA",
     instructions=(
-        "Read-only access to FOSSA projects, revisions, dependencies, "
-        "licensing issues, vulnerability issues, quality issues, and "
-        "attribution reports. No tool mutates FOSSA state."
+        "Access to FOSSA projects, revisions, dependencies, licensing issues, "
+        "vulnerability issues, quality issues, attribution reports, and "
+        "security policy enforcement.\n\n"
+        "Every tool is read-only except the two security policy tools "
+        "(fossa_enable_security_policy, fossa_assign_security_policy_to_projects), "
+        "which change what FOSSA enforces for a project and are refused unless "
+        "the operator set FOSSA_ALLOW_WRITES=true. Prefer "
+        "fossa_evaluate_security_policy to see what a policy would block before "
+        "enabling anything."
     ),
     lifespan=lifespan,
     host=settings.fossa_http_host,
@@ -52,6 +58,17 @@ async def healthz(request: Request) -> PlainTextResponse:
 
 _READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
+# Policy writes are idempotent assignments, not deletions: re-applying the same
+# policy id converges rather than destroying anything, so destructiveHint is
+# False. They are emphatically not read-only, and idempotentHint is what tells a
+# client a retry is safe.
+_POLICY_WRITE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
 mcp.tool(name="fossa_list_projects", annotations=_READ_ONLY)(projects.list_projects)
 mcp.tool(name="fossa_get_project", annotations=_READ_ONLY)(projects.get_project)
 mcp.tool(name="fossa_list_project_revisions", annotations=_READ_ONLY)(
@@ -64,6 +81,16 @@ mcp.tool(name="fossa_get_issue", annotations=_READ_ONLY)(issues.get_issue)
 mcp.tool(name="fossa_project_posture", annotations=_READ_ONLY)(posture.project_posture)
 mcp.tool(name="fossa_get_attribution_report", annotations=_READ_ONLY)(
     reports.get_attribution_report
+)
+mcp.tool(name="fossa_get_security_policy", annotations=_READ_ONLY)(policies.get_security_policy)
+mcp.tool(name="fossa_evaluate_security_policy", annotations=_READ_ONLY)(
+    policies.evaluate_security_policy
+)
+mcp.tool(name="fossa_enable_security_policy", annotations=_POLICY_WRITE)(
+    policies.enable_security_policy
+)
+mcp.tool(name="fossa_assign_security_policy_to_projects", annotations=_POLICY_WRITE)(
+    policies.assign_security_policy_to_projects
 )
 
 

@@ -16,7 +16,7 @@ from mcp.types import TextContent
 from fossa_mcp.server import mcp
 from fossa_mcp.server import settings as server_settings
 
-EXPECTED_TOOL_NAMES = {
+EXPECTED_READ_ONLY_TOOL_NAMES = {
     "fossa_list_projects",
     "fossa_get_project",
     "fossa_list_project_revisions",
@@ -26,19 +26,96 @@ EXPECTED_TOOL_NAMES = {
     "fossa_get_issue",
     "fossa_project_posture",
     "fossa_get_attribution_report",
+    "fossa_get_security_policy",
+    "fossa_evaluate_security_policy",
+}
+
+# The only tools permitted to modify FOSSA state. Adding a name here is a
+# deliberate act — see DECISIONS.md §5, which records why the server stopped
+# being wholly read-only. A tool that writes must be listed here and must
+# advertise readOnlyHint=False, or this test fails.
+EXPECTED_WRITE_TOOL_NAMES = {
+    "fossa_enable_security_policy",
+    "fossa_assign_security_policy_to_projects",
 }
 
 
 @pytest.mark.asyncio
-async def test_tools_list_returns_exactly_nine_read_only_tools():
+async def test_tools_list_partitions_into_declared_read_and_write_tools():
     async with create_connected_server_and_client_session(mcp) as session:
         result = await session.list_tools()
 
-    assert len(result.tools) == 9
-    assert {tool.name for tool in result.tools} == EXPECTED_TOOL_NAMES
+    names = {tool.name for tool in result.tools}
+    assert names == EXPECTED_READ_ONLY_TOOL_NAMES | EXPECTED_WRITE_TOOL_NAMES
+
     for tool in result.tools:
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
+        expected_read_only = tool.name in EXPECTED_READ_ONLY_TOOL_NAMES
+        assert tool.annotations.readOnlyHint is expected_read_only, (
+            f"{tool.name} advertises readOnlyHint={tool.annotations.readOnlyHint}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_write_tools_are_refused_by_default(respx_mock):
+    """A default-configured server must not write, even if a client asks it to."""
+    assert server_settings.fossa_allow_writes is False
+
+    async with create_connected_server_and_client_session(mcp) as session:
+        result = await session.call_tool(
+            "fossa_enable_security_policy",
+            {"project_locator": "git+github.com/acme/widget", "security_policy_id": 7},
+        )
+
+    assert result.isError is True
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_policy_evaluation_survives_mcp_structured_output(respx_mock):
+    """The verdict model nests three levels deep; check it serializes over the wire."""
+    project = "git+github.com/acme/widget"
+    encoded_project = "git%2Bgithub.com%2Facme%2Fwidget"
+    encoded_revision = f"{encoded_project}%24abc123"
+
+    respx_mock.get(f"https://app.fossa.com/api/projects/{encoded_project}").mock(
+        return_value=httpx.Response(200, json={"securityIssueScanningEnabled": True})
+    )
+    respx_mock.get(f"https://app.fossa.com/api/v2/revisions/{encoded_revision}/dependencies").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "dependencies": [
+                    {
+                        "locator": "pip+mcp$1.6.0",
+                        "title": "mcp",
+                        "depth": 1,
+                        "issues": [
+                            {
+                                "type": "vulnerability",
+                                "status": "active",
+                                "vulnId": "CVE-2025-53365_pip+mcp",
+                                "cvssScore": 8.7,
+                            }
+                        ],
+                    }
+                ]
+            },
+        )
+    )
+
+    async with create_connected_server_and_client_session(mcp) as session:
+        result = await session.call_tool(
+            "fossa_evaluate_security_policy",
+            {"project_locator": project, "revision_locator": "abc123"},
+        )
+
+    assert result.isError is not True
+    assert result.structuredContent is not None
+    assert result.structuredContent["verdict"] == "block"
+    blocked = result.structuredContent["blocked"][0]
+    assert blocked["locator"] == "pip+mcp$1.6.0"
+    assert blocked["violations"][0]["vuln_id"] == "CVE-2025-53365"
 
 
 @pytest.mark.asyncio
