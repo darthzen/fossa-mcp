@@ -554,3 +554,36 @@ One operational note: mid-task, the file on disk reverted my first four edits wh
 **One deliberate deviation**: the circularity sentence (fix 10) was requested "in §6", but spot-checking of FOSSA-only rows lives in §7 item 3 — I placed it there, inline where the reader is told to "read the advisory", since a sentence about spot-check discipline in §6 would reference a procedure that section doesn't contain. Everything else applied as specified.</result>
 <usage><subagent_tokens>75426</subagent_tokens><tool_uses>35</tool_uses><duration_ms>339612</duration_ms></usage>
 </task-notification>
+
+---
+
+<task-notification>
+<task-id>ac8fc4d2f589cacd8</task-id>
+<tool-use-id>toolu_01MhwN79XJ5zwxM5TGdmmzKx</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/ac8fc4d2f589cacd8.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix fossa-api-audit skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All fixes applied and verified. Summary:
+
+## Changes to `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-api-audit/SKILL.md`
+
+1. **Step 1 SPEC parameterization (HIGH):** Snippet now opens with `SPEC=${SPEC:-spec/fossa-openapi.json}` and passes `"$SPEC"` to python via `sys.argv`; the git-show fallback adds `export SPEC="$TMPDIR/fossa-openapi.json"`. The Traps missing-spec entry now says to point `SPEC` at the copy. Both paths re-run successfully (default: `API 4.34.55: 191 paths, 271 operations (157 GET, 114 write-method)`; fallback via `$TMPDIR`: same version/paths).
+2. **Step 4 no-local-token branch (HIGH):** New paragraph covering the `.env.example`-only checkout with a remote HTTP MCP deployment holding its token server-side: verify via connected MCP tools for the shared endpoint set, list the rest as unverified with "no local credential", and state that a possibly-stale connected server proves endpoint identity (path equality), not checkout code behavior — name the surface used and its tool count. (Confirmed: no `.env` exists, only `.env.example`.)
+3. **Step 5 refusal surface (HIGH):** Command runs both `tests/test_policy_tools.py` and `tests/test_package_tools.py` (verified on `block-package-tools`: 6 and 9 `call_count == 0` assertions respectively), with a discovery instruction — `grep -rl "call_count == 0" tests/` — and "run what the grep finds, not this list, whenever they differ."
+4. **Traps de-hardcoded (MEDIUM):** "9 on the current working branch, 13 on api-parity" → "has differed across concurrently live branches"; the `fossa_list_projects` POST-fallback and `fossa_get_project` four-GET claims rephrased as "has varied by branch — derive it from the module" (verified false on `block-package-tools`: projects.py issues exactly one GET per tool, no POST branch). Also fixed the same false "genuinely issues it" claim in step 1.
+5. **Step 2 snippets (MEDIUM):** Import extraction is now `sed -n '/from .tools import/,/)/p'`; mapping grep is `grep -n -A2` with a note that method/path often sit on the following line. Both re-run and verified against both import shapes (see caveat below).
+6. **Intro count (MEDIUM):** "6 of 157" replaced with a stated counting rule and self-verified number: **4 of 157** GETs uncomparable at 4.34.55 — 3 that document no 200 response at all (`/services/github-app/installation-url`, `/packages/report`, `/revisions/{locator}/original-sbom`) plus `GET /projects/{locator}`, whose 200 schema is an object with zero properties.
+7. **Step 6 (LOW):** Verdict unit is now operations ("X of Y read operations verified live"); liveness takes three values including **verified transitively**; explicit note that MCP-tool verification yields ok/exception, not HTTP statuses.
+8. **Step 4 (LOW):** `curl -o` targets `"$TMPDIR/resp.json"`; added the `examples` location clause (`content` → `application/json` → `examples`, beside the schema — verified in the spec, keys `['schema', 'examples']`).
+9. **Step 1 (LOW):** Snippet now prints counts and writes the 271-op list to `$TMPDIR/fossa-ops.txt` (verified: 271 lines), with an explicit counts-only-in-transcript note.
+
+Frontmatter confirmed intact; no stale hardcodes remain (checked programmatically).
+
+## Deliberately unchanged
+- Intro's "has had 9 tools on one branch and 13 on another at the same time" — past-tense historical claim illustrating drift; fix 4 was scoped to Traps and the intro wasn't named for it.
+
+## Important finding
+Mid-task, another session switched the checkout from `block-package-tools` (15 tools, multi-line import, both refusal-test files) to `skills-fossa-protect-suggest-score` (13 tools, single-line import, no `test_package_tools.py`). My working-tree edits survived the checkout. I verified all branch-sensitive facts against `block-package-tools` via `git show`, and used the switch as live evidence to make two of my own new claims branch-agnostic (import shape "varies by branch"; refusal-test file set is discovered, not assumed). The two-file pytest command in step 5 is guarded by the run-what-the-grep-finds instruction, so it degrades correctly on branches lacking the package module.</result>
+<usage><subagent_tokens>65740</subagent_tokens><tool_uses>36</tool_uses><duration_ms>370640</duration_ms></usage>
+</task-notification>
