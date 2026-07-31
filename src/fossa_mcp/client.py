@@ -118,14 +118,21 @@ class FossaClient:
         path: str,
         *,
         params: list[tuple[str, str]] | None = None,
+        json_body: dict[str, Any] | None = None,
     ) -> tuple[str, str | None]:
         """
         Make an HTTP request and return the raw text response.
 
+        `json_body` is accepted here and not only on `request_json` because
+        several FOSSA deletes take a JSON body and answer `204` with an empty
+        one — `DELETE /package-labels` and `DELETE /package-label-assignments`
+        both do. `request_json` calls `.json()` on every 2xx and would fail
+        parsing the empty body, so those go through this method.
+
         Raises:
             FossaApiError: If the API returns an error.
         """
-        response = await self._request(method, path, params=params)
+        response = await self._request(method, path, params=params, json_body=json_body)
 
         if 200 <= response.status_code < 300:
             return response.text, response.headers.get("content-type")
