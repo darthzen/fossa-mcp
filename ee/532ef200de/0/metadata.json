@@ -1,0 +1,103 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "ee532ef200de",
+  "session_id": "08b2d86d-189e-414c-8067-bcd0434b657a",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-31T19:51:00.905147Z",
+  "branch": "api-parity",
+  "checkpoints_count": 3,
+  "save_step_count": 3,
+  "files_touched": [
+    "src/fossa_mcp/models.py",
+    "src/fossa_mcp/models/__init__.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "57332f11cc3b",
+  "checkpoint_transcript_start": 49,
+  "transcript_lines_at_start": 49,
+  "compact_transcript_start": 13,
+  "token_usage": {
+    "input_tokens": 54,
+    "cache_creation_tokens": 75363,
+    "cache_read_tokens": 3834534,
+    "output_tokens": 46397,
+    "api_call_count": 29
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-31T19:51:00.857337Z",
+    "agent_lines": 284,
+    "agent_removed": 276,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 284,
+    "total_lines_changed": 560,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 1218,
+      "user_lines_removed": 4,
+      "agent_lines_added": 285,
+      "agent_lines_removed": 276,
+      "user_added_per_file": {
+        "src/fossa_mcp/models/issues.py": 546,
+        "src/fossa_mcp/models/projects.py": 235,
+        "src/fossa_mcp/models/release_groups.py": 388,
+        "src/fossa_mcp/tools/projects.py": 49
+      },
+      "user_removed_per_file": {
+        ".venv": 1,
+        "src/fossa_mcp/tools/projects.py": 3
+      }
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 4454,
+      "user_lines_removed": 9,
+      "agent_lines_added": 1550,
+      "agent_lines_removed": 279,
+      "user_added_per_file": {
+        "src/fossa_mcp/models/issues.py": 4,
+        "src/fossa_mcp/models/projects.py": 1,
+        "src/fossa_mcp/models/revisions.py": 267,
+        "src/fossa_mcp/tools/issues.py": 994,
+        "src/fossa_mcp/tools/projects.py": 391,
+        "src/fossa_mcp/tools/release_groups.py": 796,
+        "src/fossa_mcp/tools/revisions.py": 802,
+        "tests/test_projects_tools.py": 479,
+        "tests/test_revisions_tools.py": 720
+      },
+      "user_removed_per_file": {
+        ".venv": 1,
+        "src/fossa_mcp/models/issues.py": 1,
+        "src/fossa_mcp/models/projects.py": 3,
+        "src/fossa_mcp/tools/issues.py": 2,
+        "src/fossa_mcp/tools/revisions.py": 2
+      }
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 1,
+      "agent_lines_added": 7905,
+      "agent_lines_removed": 283,
+      "user_removed_per_file": {
+        ".venv": 1
+      }
+    }
+  ]
+}

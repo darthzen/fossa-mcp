@@ -1,0 +1,27 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "ee532ef200de",
+  "strategy": "manual-commit",
+  "branch": "api-parity",
+  "checkpoints_count": 3,
+  "files_touched": [
+    "src/fossa_mcp/models.py",
+    "src/fossa_mcp/models/__init__.py"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ee/532ef200de/0/metadata.json",
+      "transcript": "/ee/532ef200de/0/full.jsonl",
+      "compact_transcript": "/ee/532ef200de/0/transcript.jsonl",
+      "content_hash": "/ee/532ef200de/0/content_hash.txt",
+      "prompt": "/ee/532ef200de/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 54,
+    "cache_creation_tokens": 75363,
+    "cache_read_tokens": 3834534,
+    "output_tokens": 46397,
+    "api_call_count": 29
+  }
+}

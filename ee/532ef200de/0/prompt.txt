@@ -1,0 +1,95 @@
+I'm using the claude code in the desktop app. Will you still do the entire.io integration correctly?
+
+---
+
+<task-notification>
+<task-id>a3d245c438618e64f</task-id>
+<tool-use-id>toolu_01NQJNh1T1guBiubdt1VaAkH</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/08b2d86d-189e-414c-8067-bcd0434b657a/tasks/a3d245c438618e64f.output</output-file>
+<status>completed</status>
+<summary>Agent "Projects domain parity" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All green: ruff, ruff format, pyright, and 20 new tests (full suite 175 passed).
+
+## TOOLS
+
+| tool_name | function | tier | HTTP ops covered |
+|---|---|---|---|
+| `fossa_list_projects` | `projects.list_projects` (extended) | READ | `GET /v2/projects`, `POST /v2/projects` |
+| `fossa_get_project` | `projects.get_project` (unchanged) | READ | `GET /projects/{locator}` |
+| `fossa_get_projects_summary` | `projects.get_projects_summary` | READ | `GET /v2/projects/summary` |
+| `fossa_get_project_associations` | `projects.get_project_associations` | READ | `GET /projects/{locator}/labels`, `GET /v2/projects/{locator}/release-groups`, `GET /projects/{locator}/last-published` |
+| `fossa_export_project_issues` | `projects.export_project_issues` | READ | `GET /projects/{locator}/export-issues/json`, `.../csv` |
+| `fossa_update_project` | `projects.update_project` | WRITE | `PUT /projects/{locator}` |
+| `fossa_apply_project_label` | `projects.apply_project_label` | WRITE | `PUT /v2/projects/labels` |
+| `fossa_generate_project_attribution_slug` | `projects.generate_project_attribution_slug` | WRITE | `PUT /projects/{locator}/generate_attribution_slug` |
+| `fossa_delete_project_attribution_slug` | `projects.delete_project_attribution_slug` | DESTRUCTIVE | `DELETE /projects/{locator}/generate_attribution_slug` |
+| `fossa_delete_project` | `projects.delete_project` | DESTRUCTIVE | `DELETE /projects/{locator}` |
+| `fossa_delete_projects` | `projects.delete_projects` | DESTRUCTIVE | `DELETE /v2/projects` |
+
+11 tools against a ~9 target; the two consolidations already made are the export tool (2 paths) and the associations tool (3 paths).
+
+## REGISTRATION
+
+Two new annotation constants are needed:
+
+```python
+# Project updates and label assignment are convergent: re-sending the same body
+# or the same label id lands on the same state.
+_PROJECT_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True
+)
+# Slug rotation replaces the old slug, so a repeat call does not converge.
+_PROJECT_ROTATE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True
+)
+_PROJECT_DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True
+)
+```
+
+```python
+mcp.tool(name="fossa_get_projects_summary", annotations=_READ_ONLY)(projects.get_projects_summary)
+mcp.tool(name="fossa_get_project_associations", annotations=_READ_ONLY)(
+    projects.get_project_associations
+)
+mcp.tool(name="fossa_export_project_issues", annotations=_READ_ONLY)(
+    projects.export_project_issues
+)
+mcp.tool(name="fossa_update_project", annotations=_PROJECT_WRITE)(projects.update_project)
+mcp.tool(name="fossa_apply_project_label", annotations=_PROJECT_WRITE)(
+    projects.apply_project_label
+)
+mcp.tool(name="fossa_generate_project_attribution_slug", annotations=_PROJECT_ROTATE)(
+    projects.generate_project_attribution_slug
+)
+mcp.tool(name="fossa_delete_project_attribution_slug", annotations=_PROJECT_DESTRUCTIVE)(
+    projects.delete_project_attribution_slug
+)
+mcp.tool(name="fossa_delete_project", annotations=_PROJECT_DESTRUCTIVE)(projects.delete_project)
+mcp.tool(name="fossa_delete_projects", annotations=_PROJECT_DESTRUCTIVE)(projects.delete_projects)
+```
+
+## INTEGRATION_TEST
+
+- `EXPECTED_READ_ONLY_TOOL_NAMES` += `fossa_get_projects_summary`, `fossa_get_project_associations`, `fossa_export_project_issues`
+- `EXPECTED_WRITE_TOOL_NAMES` += `fossa_update_project`, `fossa_apply_project_label`, `fossa_generate_project_attribution_slug`, `fossa_delete_project_attribution_slug`, `fossa_delete_project`, `fossa_delete_projects`
+
+## COVERAGE
+
+18 operations sit under `/projects*` + `/v2/projects*`. 15 are covered by these tools; 2 belong to other domains (`GET /projects/{locator}/revisions` → `revisions.list_project_revisions`; `PUT /v2/projects/policy` → `policies.assign_security_policy_to_projects`); 1 is deliberately not exposed:
+
+- **`GET /projects/{locator}/export-issues`** — the umbrella path is the same operation as the two format-specific paths, selected by a `format` query parameter instead of the path segment. The tool calls `/export-issues/json` or `/export-issues/csv`, which is unambiguous about the response media type. Nothing is unreachable as a result.
+
+`PUT /projects/{locator}` exposes 23 of the endpoint's 53 body fields: `title`, `description`, `project_url`→`url`, `notes`, `public`, `default_branch`, `tracking_branches`, `hidden_branches`, `policy_id`, `security_policy_id`, `quality_policy_id`, `sbom_policy_id`, `policies_approve_multilicense`, the four `*IssueScanningEnabled`/`sbomAnalysisEnabled` flags, the three `*StatusCheckEnabled` flags, `label_ids`→`labels`, `transitive_excludes`, `report_custom_text`. Left out: the nested config blocks (`issueTrackerCustomFields`, `notifications`, `filters`, `bom_column_settings`, the other `issueTracker*` arrays, `issue_tracker_url`/`type`, `useGlobalTrackerSettings`), the snippet/vendored/quick-import scanning flags, the container `excludeBaseLayerIssues*` trio, `integrationhook_*`, `scm_url`/`manual_scm_url`/`vcs_host`, `defaultSavedOption*`, `snippetAutoRejectMatchPercentageThreshold`, and the FOSSA-populated `invalidCredential`/`bom_public_id`. Every field defaults to `None` and `to_payload()` dumps with `exclude_none=True`, so an unnamed field never appears in the body — which also means clearing a nullable field to `null` is not expressible through this tool.
+
+## NOTES
+
+1. **`locators` vs `locators[]`.** `policies.py` sends `locators[]` to `PUT /v2/projects/policy`; the spec declares the parameter as `locators` on that endpoint and on both `DELETE /v2/projects` and `PUT /v2/projects/labels`. I used the spec-declared `locators`, repeated. Rationale, also stated in the module docstring: on a bulk delete, a parameter name FOSSA does not recognize degrades the request into "every project matching the filters", and with no filters that is the whole organization. Repeated `locators` parses as an array under `qs` and degrades to a single locator under a naive parser. Worth verifying both spellings against a live org and reconciling `policies.py` — I did not touch it.
+2. **`fossa_delete_projects` sends no filter parameters at all**, only locators, so there is nothing for FOSSA to widen the target set with. `"all"` is rejected in the input model for both this tool and `fossa_apply_project_label`.
+3. **`list_projects` now issues a POST** when the encoded query exceeds 1800 characters (a long `locators` filter), per the endpoint's documented purpose. It remains read-only and keeps `readOnlyHint=True`; existing `test_tools.py` assertions are unaffected. `POST` is never retried by `client.py`, which is correct here since it is a read.
+4. **Empty-body responses.** `DELETE /projects/{locator}` returns 200 with no body and the slug delete returns 204; `request_json` would raise `FossaApiError("Invalid JSON response")` on both, so the three delete tools use `request_text`. `PUT .../generate_attribution_slug` returns a bare JSON string, and `GET .../last-published` returns a bare ISO timestamp string — both pass through `request_json`, whose declared return type (`dict | list`) is narrower than what FOSSA actually sends. No change to `client.py` was needed.
+5. **`server.py` instructions string is now stale** — it says "Every tool is read-only except the two security policy tools." That needs rewriting once the parity tools are registered.
+6. **`GET /projects/{locator}/labels`** is tagged `Project Labels` in the spec rather than `Projects`; I covered it here because it is addressed by project locator, but flag it in case the Labels domain agent also claims it.</result>
+<usage><subagent_tokens>162795</subagent_tokens><tool_uses>30</tool_uses><duration_ms>558215</duration_ms></usage>
+</task-notification>
