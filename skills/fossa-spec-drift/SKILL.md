@@ -225,10 +225,12 @@ do not commit it, and do not fold it into an unrelated commit.
   count that skips the method-set filter also miscounts, because path items can
   carry non-method keys.
 - **Absent from both specs is not the same as safe.** FOSSA has real endpoints
-  the spec never documented — `docs/ENDPOINT_INFERENCE.md` reconstructs the
-  ones behind `fossa_block_package` and `fossa_unblock_package`. A tool built
-  on an inferred endpoint cannot be drift-checked here; list any such tool as
-  "not covered by the spec" instead of silently skipping it.
+  the spec never documented — the ones behind `fossa_block_package` and
+  `fossa_unblock_package` were captured from the web app's own traffic and are
+  documented in `src/fossa_mcp/tools/packages.py`, which is the contract for
+  them since no spec entry exists. A tool built on an undocumented endpoint
+  cannot be drift-checked here; list any such tool as "not covered by the spec"
+  instead of silently skipping it.
 - **"Changed" per the script is necessary, not sufficient, for action.** It
   flags any byte-level difference inside parameters/requestBody/responses,
   including reworded descriptions. Read the flagged operation before declaring
