@@ -1,0 +1,58 @@
+The job interviewer around this project asked for skills to go along with the mcp server. She suggested internal assessment skills, notably an API coverage to verify all the endpoints are alive and accessible. For customers, she suggested a focus on vulnerability metadata (for example, build a json paylod to use when comparing to other vendors' results), and skills around licensing issues.
+
+Given those paramters, what skills do you think would be valuable to add?
+
+---
+
+Go and create all five. Use subagents
+
+---
+
+<task-notification>
+<task-id>aa1e502d45e7c730b</task-id>
+<tool-use-id>toolu_01QnyW4ojQHqF2TP4sygs2F2</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/aa1e502d45e7c730b.output</output-file>
+<status>completed</status>
+<summary>Agent "Write fossa-license-review skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Created `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/skills/fossa-license-review/SKILL.md` (nothing else touched). It follows the fossa-suggest-score/fossa-protect house style: frontmatter with "Use when..." triggers covering license audit / can-we-ship / GPL-AGPL-copyleft / compliance / M&amp;A due diligence; a "why this exists" and "honest framing" preamble; five numbered procedural sections (distribution model first with the SaaS/AGPL exception and static-vs-dynamic LGPL linkage; findings via `fossa_project_posture` + `fossa_list_issues(category="licensing", ...)` + paged `fossa_list_dependencies`; five obligation classes in a table aligned with the LIS rubric's copyleft tiers, including Apache-2.0 NOTICE/patent notes, dual-licensing election, and license-change-on-upgrade (BUSL/SSPL); the obligation × distribution × role cross with the relicense/replace/isolate/attribute remediation menu; and a verdict-first report format with the one-paragraph noise explanation and a standalone unknowns block). Traps covers the revision_locator requirement, discovered-vs-declared mismatches, unlicensed ≠ permissive, SaaS ≠ safe with AGPL, dev-tool copyleft noise, the direct/deep vs direct/transitive vocabulary split, and pagination; Scope states the not-legal-advice position exactly once and the no-write/no-code-edit boundaries. Cross-links to [[fossa-suggest-score]] (quantitative ranking) and [[fossa-attribution]] (NOTICE-file follow-on) are in place. Three repo facts contradict the brief: (1) the issue category enum is `licensing`/`vulnerability`/`quality` — there is no `security` category (the skill says so explicitly); (2) `src/fossa_mcp/models/` does not exist as a package — git tracks a single `src/fossa_mcp/models.py`, and the untracked `models/` directory contains only `__pycache__`, despite commit bb9af86's message claiming a package split; (3) `fossa_list_dependencies` takes only a full `revision_locator` (no `project_locator` parameter), which the skill's tool examples reflect.</result>
+<usage><subagent_tokens>59771</subagent_tokens><tool_uses>16</tool_uses><duration_ms>151381</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3a351a7ad8ac2b47</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a3a351a7ad8ac2b47.output</output-file>
+<status>completed</status>
+<summary>Agent "Write fossa-api-audit skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Created `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/skills/fossa-api-audit/SKILL.md` (only file touched), matching the house style of the two reference skills: frontmatter with "Use when..." triggers, an opening "why this exists" plus honest-framing block, six numbered procedural sections with runnable commands (spec enumeration one-liner verified against the real spec: 191 paths, 271 ops, 157 GET/114 write at 4.34.55), a Traps section built from repo-verified gotchas, and a Scope section (no mutations, no spec regeneration without asking, no code changes). Several brief facts contradicted the repo and the skill reflects reality instead: the working tree is on branch `block-package-tools` (not `api-parity` as the snapshot said), and that branch has **no** `spec/fossa-openapi.json`, no `writes.py`, no `policies.py`/`release_groups.py`, no `API_PARITY_PLAN.md`, and no refusal tests — those all live on the `api-parity` and `security-policy-writes` branches, where `server.py` registers **13** tools (9 read + 4 policy, two of them gated writes), not 9; `release_groups.py` exists there but is unregistered, as the brief said. The env var is `FOSSA_API_TOKEN` (`Settings.fossa_api_token`, Bearer auth, `.env` supported) — `$FOSSA_API_KEY` from the brief does not exist anywhere. The write-gate env vars are `FOSSA_ALLOW_WRITES`/`FOSSA_ALLOW_DESTRUCTIVE`/`FOSSA_ALLOW_ADMIN` as stated; refusal tests in `tests/test_policy_tools.py` assert `respx_mock.calls.call_count == 0` but also assert the tier is off, so an exported `FOSSA_ALLOW_WRITES=true` fails them — the skill runs them under `env -u`. Two extra verified traps made it in: `fossa_list_projects` legitimately issues documented `POST /v2/projects` as a read fallback, and 6 of 157 GET ops (including `GET /projects/{locator}`) declare empty 200 schemas, confirming the spec-gap-not-server-bug rule. Because of the branch divergence, the skill derives spec, tool list, and tool-to-path mapping at runtime, requires naming the audited branch in the report, and treats a missing spec or missing write surface as a reportable branch fact rather than a failure.</result>
+<usage><subagent_tokens>74451</subagent_tokens><tool_uses>24</tool_uses><duration_ms>296062</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab4e8c22b31652560</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/ab4e8c22b31652560.output</output-file>
+<status>completed</status>
+<summary>Agent "Write fossa-vuln-export skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Created the skill at `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/skills/fossa-vuln-export/SKILL.md` with `references/field-mapping.md` beside it, matching the fossa-suggest-score/fossa-protect house style (frontmatter with "Use when..." triggers covering export/compare/VDR-OSV-CycloneDX/vendor-comparison phrasing, a "why this exists" plus "honest framing" preamble, numbered procedure with exact tool calls, Traps, Scope, and [[fossa-suggest-score]] cross-links for prioritization hand-off). Mode 1 covers locator resolution, posture-first retrieval with mechanical truncation detection, paging `fossa_list_issues`, joining issues to dependencies, a 14-row fetcher→purl table (npm scopes, pip/PEP 503, go, mvn colon, cargo, gem, nuget, composer, hex, pod, git/github-vs-generic, apk/deb/rpm, generic fallback), and OSV-primary / CycloneDX-1.6-VDR-secondary emission with reconciliation arithmetic; mode 2 normalizes both sides to (version-stripped purl, alias-resolved id) keys and reports overlap counts first, then severity, FOSSA-only (spot-check discipline), vendor-only (scope-difference discipline), and provenance. The reference file holds the three-way FOSSA→OSV→CycloneDX field table and per-vendor key-extraction paths for Grype/Trivy/Snyk/CycloneDX/SARIF/OSV. Repo facts contradicting the brief: (1) the issue category enum is `licensing | vulnerability | quality` — there is no `security` category, so the skill uses `category="vulnerability"` and traps the wrong name; (2) `top_issue_count` is validated to a max of 25 (`models.py` PostureInput), so "high top_issue_count" means 25 with mandatory paging beyond it; (3) models live in the single tracked `src/fossa_mcp/models.py` — `src/fossa_mcp/models/issues.py` does not exist (the `models/` dir holds only a stale `__pycache__`, and git HEAD on disk is `4c03bdf`, not the `00dcbb0` release-groups commit the session snapshot showed); (4) `fossa_list_dependencies` passes `revision_locator` verbatim as a path parameter (no `split_revision_locator` normalization), so it requires the full `project$revision` form — added as a trap; also noted the 202/`analysis_in_progress` state and the active-only (ignored-issues-excluded) default, both from the tool code.</result>
+<usage><subagent_tokens>72174</subagent_tokens><tool_uses>17</tool_uses><duration_ms>308639</duration_ms></usage>
+</task-notification>
+
+---
+
+Create your own branch for these skills and commit them there. None of the other work will overlap, so it can be merged in while the rest is being worked on
+
+---
+
+Can we put symlinks to the actual files in the .claude directory? I'd rather not have to worry about two sets of files getting out of sync.
+
+---
+
+Can you submit a pr to merge skills into main?
