@@ -1,0 +1,89 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "d45667c26450",
+  "session_id": "08b2d86d-189e-414c-8067-bcd0434b657a",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-31T19:30:10.839389Z",
+  "branch": "api-parity",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".env.example",
+    "API_PARITY_PLAN.md",
+    "DECISIONS.md",
+    "README.md",
+    "policy.example.json",
+    "spec/README.md",
+    "spec/fossa-openapi.json",
+    "src/fossa_mcp/client.py",
+    "src/fossa_mcp/config.py",
+    "src/fossa_mcp/errors.py",
+    "src/fossa_mcp/models.py",
+    "src/fossa_mcp/policy.py",
+    "src/fossa_mcp/server.py",
+    "src/fossa_mcp/tools/policies.py",
+    "src/fossa_mcp/writes.py",
+    "tests/test_mcp_integration.py",
+    "tests/test_policy.py",
+    "tests/test_policy_tools.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "4d13ff90758b",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 13,
+    "cache_creation_tokens": 67258,
+    "cache_read_tokens": 504803,
+    "output_tokens": 4510,
+    "api_call_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-31T19:30:10.821749Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 89084,
+    "human_modified": 36,
+    "human_removed": 0,
+    "total_committed": 89084,
+    "total_lines_changed": 89120,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 89120,
+      "user_lines_removed": 18,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".env.example": 9,
+        "API_PARITY_PLAN.md": 213,
+        "DECISIONS.md": 109,
+        "README.md": 87,
+        "policy.example.json": 24,
+        "spec/README.md": 7,
+        "spec/fossa-openapi.json": 86705,
+        "src/fossa_mcp/client.py": 41,
+        "src/fossa_mcp/config.py": 44,
+        "src/fossa_mcp/errors.py": 12,
+        "src/fossa_mcp/models.py": 30,
+        "src/fossa_mcp/policy.py": 555,
+        "src/fossa_mcp/server.py": 31,
+        "src/fossa_mcp/tools/policies.py": 308,
+        "src/fossa_mcp/writes.py": 83,
+        "tests/test_mcp_integration.py": 82,
+        "tests/test_policy.py": 406,
+        "tests/test_policy_tools.py": 374
+      },
+      "user_removed_per_file": {
+        ".env.example": 1,
+        "README.md": 1,
+        "spec/README.md": 1,
+        "src/fossa_mcp/client.py": 6,
+        "src/fossa_mcp/server.py": 4,
+        "tests/test_mcp_integration.py": 5
+      }
+    }
+  ]
+}
