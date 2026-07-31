@@ -1,0 +1,64 @@
+Create the email. Include the summary of your work as well as the new skills that were just mmerged in the main repo.
+
+---
+
+Both of those can move in, actually.
+
+---
+
+Leave the skills alone. I just wanted you to read them to summarize them. The other process is handling edits. 
+
+I’ll get to the email later. You go ahead and start firing off subagents to finish off the overall project.
+
+---
+
+<task-notification>
+<task-id>a9ba100966d2816b8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a9ba100966d2816b8.output</output-file>
+<status>completed</status>
+<summary>Agent "Register batch 1 parity tools" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done.
+
+## Branch
+`parity/register-batch1`, branched from `api-parity`, one commit `18acc12`. Nothing pushed. `skills/` untouched.
+
+## Test counts
+- Baseline on `api-parity`: **281 passed, 1 deselected**
+- Final: **306 passed, 1 deselected** (+25: the single write-refusal test became 25 parametrized cases, plus one table-completeness test)
+- `ruff check`, `ruff format --check`, `pyright` all clean.
+
+## What got registered
+46 tools added; tool list went from 13 to **59** (36 read-only, 23 write). Every tool in the four modules is registered — nothing was skipped.
+
+**`_READ_ONLY`** (25 new): `get_projects_summary`, `get_project_associations`, `export_project_issues`; `list_revision_scans`, `get_revision_notice_files`, `get_revision_sbom`, `get_revision_remediation_guidance`, `get_revision_attribution_json`, `render_revision_attribution`, `list_revision_dependencies_v1`; `get_issue_facets`, `list_issue_revisions`, `compare_issue_summaries`, `get_issue_affected_projects`, `export_global_issues_csv`, `get_issue_exceptions`, `get_issue_overview`, `get_issue_filters`; `get_release_group`, `list_release_group_releases`, `get_release_group_release`, `get_release_group_attribution_report`, `get_release_group_attribution_status`.
+
+**`_WRITE`** (`destructiveHint=False`, `idempotentHint=True`): `update_project`, `apply_project_label`, `update_revision`, `extend_issue_exception`, `update_release_group`, `update_release_group_release`.
+
+**`_WRITE_ACCUMULATING`** (new; `destructiveHint=False`, `idempotentHint=False`): `generate_project_attribution_slug`, `email_revision_attribution`, `create_public_attribution_report`, `create_issue_dispute`, `export_issue_overview`, `save_issue_filter`, `create_release_group`, `create_release_group_release`, `queue_release_group_attribution_report`.
+
+**`_DESTRUCTIVE`** (new; `destructiveHint=True`, `idempotentHint=True`): `delete_project_attribution_slug`, `delete_project`, `delete_projects`, `delete_issue_exceptions`, `delete_issue_filter`, `delete_release_group`, `delete_release_group_release`.
+
+**`_DESTRUCTIVE_UNBOUNDED`** (new; `destructiveHint=True`, `idempotentHint=False`): `update_issues` only.
+
+`_POLICY_WRITE` is now an alias of `_WRITE` — the two carried byte-identical hints and the duplicate literal invited drift.
+
+## Judgement calls, not mechanical
+- **`fossa_update_issues`** picks WRITE or DESTRUCTIVE at call time from whether `issue_ids` is passed. A static annotation can't express that, so it advertises the worse case. `idempotentHint=False` because its `issueException` action creates a durable ignore rule.
+- **`fossa_generate_project_attribution_slug`** breaks every previously shared report link — a real argument for `destructiveHint=True`. Left False per your rule that the hint is reserved for deletes and unbounded targets; the breakage is stated in the tool description instead. Flagging in case you'd rather flip it.
+- **`fossa_export_issue_overview`** and **`fossa_queue_release_group_attribution_report`** read data but create org-side background jobs, so they're writes and non-idempotent.
+- **Deletes get `idempotentHint=True`** — deleting twice removes nothing further, even though the second call may 404.
+
+## Refusal test
+Parametrized over all 25 write tools with *valid* arguments (invalid ones would produce the same isError-with-no-traffic result while proving nothing), asserting `isError`, `respx_mock.calls.call_count == 0`, and `FOSSA_ALLOW_WRITES` in the error text. A separate test asserts the argument table's keys equal `EXPECTED_WRITE_TOOL_NAMES` so it can't fall behind.
+
+## Defects noticed, not fixed
+1. **`client.py` cannot express "2xx with no body"** — `request_json` calls `.json()` on any 2xx and raises on 204. Worked around locally in `tools/issues.py` (`_request_tolerating_empty_body`) and again in `tools/projects.py` and `tools/release_groups.py` via `request_text`. Three modules independently patching the same client gap.
+2. **Bulk-parameter name disagreement**: `tools/projects.py` sends `locators`, `tools/policies.py` sends `locators[]` for the same style of bulk endpoint. The `api-parity` commit flags this as needing one live call to reconcile; it's still unreconciled.
+3. **`GET /revisions/{locator}/original-sbom` answers 302** and the tool reads the redirect target out of the *error body*, because the client neither follows redirects nor exposes headers. Works, but it's parsing an error path for a success value.
+4. **`FossaClient` retries idempotent methods**, and DECISIONS §7 says POST/PATCH are never retried. Batch 1 adds the first PATCH (`update_revision`) and many POSTs — worth confirming `_IDEMPOTENT_METHODS` actually excludes PATCH, which I did not verify.
+5. **`_READ_ONLY` leaves `destructiveHint`/`idempotentHint` unset (None)**, so per MCP spec defaults they nominally read as destructive/non-idempotent. Harmless because `readOnlyHint=True` dominates, and it's pre-existing, but it's why the new test only checks `destructiveHint` on the write tools.</result>
+<usage><subagent_tokens>137697</subagent_tokens><tool_uses>66</tool_uses><duration_ms>477310</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a9ba100966d2816b8</worktreePath><worktreeBranch>worktree-agent-a9ba100966d2816b8</worktreeBranch></worktree>
+</task-notification>
