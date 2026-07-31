@@ -22,6 +22,7 @@ from .tools import (
     issues,
     labels,
     org_settings,
+    packages,
     policies,
     posture,
     projects,
@@ -86,6 +87,12 @@ mcp = FastMCP(
         "fossa_update_org_settings (its writes replace a section rather than "
         "merging, so send the whole section), and fossa_evaluate_security_policy "
         "before fossa_enable_security_policy.\n\n"
+        "Blocking one package is a quality-policy rule, not a security-policy "
+        "setting: fossa_block_package adds the rule, fossa_unblock_package "
+        "removes it. Unblocking is destructive because FOSSA offers no way to "
+        "drop a single rule — it rewrites the policy's entire rule set, so a "
+        "concurrent edit by anyone else is lost. Both sit on endpoints FOSSA "
+        "does not document and may change without notice.\n\n"
         "Two addressing notes. Release groups are addressed by numeric id only; "
         "there is no list-release-groups endpoint, so find the id in the release "
         "group's FOSSA URL or through fossa_get_project_associations. The "
@@ -518,6 +525,18 @@ mcp.tool(name="fossa_share_sbom_revision", annotations=_WRITE_ACCUMULATING)(
 mcp.tool(name="fossa_set_license_conclusion", annotations=_DESTRUCTIVE)(
     inventory.set_license_conclusion
 )
+
+# --- per-package blocking ----------------------------------------------------
+# Undocumented endpoints, captured from the FOSSA web app and verified live.
+# Blocking re-posts to the same rule id rather than duplicating, so it converges
+# on re-application like any other _WRITE. Unblocking is _DESTRUCTIVE because
+# FOSSA has no single-rule delete: it replaces the policy's entire rule set, so
+# the blast radius is every rule on the policy rather than the one named. It is
+# still idempotent in the sense that tier means — a second unblock finds no
+# matching rule and sends nothing. The concurrency hazard (a simultaneous edit
+# by someone else is lost) is a different property, documented on the tool.
+mcp.tool(name="fossa_block_package", annotations=_WRITE)(packages.block_package)
+mcp.tool(name="fossa_unblock_package", annotations=_DESTRUCTIVE)(packages.unblock_package)
 
 
 def _forbid_unexpected_tool_arguments(server: FastMCP) -> None:
