@@ -613,3 +613,62 @@ Write a global skill for implementing an api as an mcp, including exploring the 
 Test this process against the reverb.com api. Here is a read-only token you can use: REDACTED
 
 Use your experience to update the skill and improve it
+
+---
+
+<task-notification>
+<task-id>a95c752189de2413d</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a95c752189de2413d.output</output-file>
+<status>completed</status>
+<summary>Agent "Scaffold reverb-mcp per skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result># 1. What was built and test results
+
+**Project**: `/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/scratchpad/reverb-mcp/` — uv project (Python 3.13, mcp 2.0.0, pydantic, httpx; respx+pytest dev).
+
+Layout per the skill's step 2: `reverb_mcp/config.py` (pydantic-settings, SecretStr token, three tier flags all defaulting false, `require_tier`, result-cap setting), `reverb_mcp/client.py` (single request helper, method-aware retry with `IDEMPOTENT_METHODS` frozenset — POST/PATCH get exactly one attempt — plus `cap_result` with `truncated`/`original_chars` flags), `models/` and `tools/` one module per domain (listings, categories, orders, wants), `server.py` registration-only with `ToolAnnotations` (4 read-only tools, 1 write tool). Live probe captures saved under `probes/`.
+
+**Tools**: `reverb_search_listings`, `reverb_get_listing`, `reverb_list_categories`, `reverb_my_orders` (reads, each five-part per step 3 with the spec-reading step replaced by one live probe per endpoint), and `reverb_add_to_wants` (WRITE tier, `require_tier` before even input-model construction, endpoint documented as inferred/never-live-verified).
+
+**Tests**: **9 passed** (`uv run pytest -q`, 1.56s). Contract tests assert method, exact path, query pairs, and headers including `Accept-Version: 3.0`; the refusal test asserts `WriteGateError` **and** `respx.calls.call_count == 0`; a truncation test proves the cap sets the flag; a retry-bound test caps write attempts.
+
+**Live smoke** (read-only token, one call per read tool through real tool code): search_listings 395ms (total=3028), get_listing 292ms, list_categories 45ms, my_orders 253ms. Surprises: **(a)** no rate-limit headers at all on any response; **(b)** `total_pages` is hard-clamped at 50 on /listings (total=60138 at per_page=3 still reports 50, yet page 51 serves items and `_links.next` continues) — recorded in the tool docstring; **(c)** `list_categories` genuinely tripped the 40K result cap live (320 categories → `truncated: true`, 193 returned), validating step 6 verbatim; **(d)** the orders envelope omits `per_page` while listings echoes it; **(e)** money arrives as string `amount` + integer `amount_cents`; **(f)** MCP SDK 2.0 renamed `mcp.server.fastmcp.FastMCP` → `mcp.server.mcpserver.MCPServer` and snake_cased `ToolAnnotations` attributes (camelCase still accepted as constructor aliases) — the only mid-build breakage.
+
+# 2. Friction log
+
+1. **CENTRAL: Step 1 is unexecutable for spec-less APIs.** *"Find the machine-readable spec: an OpenAPI/Swagger JSON from the docs site, a `/api-docs` or `/openapi.json` endpoint, or (worst case) the docs site's own XHR to a spec blob."* Even the worst case assumes a spec blob exists somewhere. Reverb has none — ReadMe.io prose guides only, HAL hypermedia API. The skill has no branch for this, and steps 3.1, 3.4, and 2 all inherit the assumption. What I did: promoted live probing to ground truth (one probe per endpoint, captures saved with date, shapes date-stamped in module docstrings), and derived the surface inventory from the root `_links` index (24 links) — which actually satisfies "derive, don't assert" without a spec, but the skill never says so.
+
+2. **Step 3.1 has no fallback source of truth.** *"`Field` constraints copied from the spec's parameter definitions, not from memory. Read the spec entry for the operation before writing each one."* Nothing to read. I probed each endpoint once before writing its model and encoded observed behavior with a date. Related, 3.4: *"The test encodes the spec."* My tests encode the probe captures — a strictly weaker contract the skill only acknowledges for UI-walk endpoints (5.6), not for a wholly spec-less API.
+
+3. **Contract tests omit headers.** Step 3.4 lists *"method, exact path, exact query pairs, exact JSON body"* — no headers. Reverb requires `Accept-Version: 3.0` and `Accept: application/hal+json`; an API with header versioning that silently defaults to another version would pass every test the skill prescribes while testing the wrong contract. I added header assertions to every contract test.
+
+4. **HAL/hypermedia is uncovered.** No guidance on: `_links.next` as the pagination authority (here it's the *only* honest signal — `total_pages` lies, clamped at 50); whether to pass `_links` through to agents (they bloat every resource; I stripped them and surfaced `has_next`); the root index as the discoverable surface. Step 6's *"'paginate until a short page' is the fallback, not the method"* is actively wrong for HAL — follow-`_links.next` is the method.
+
+5. **Step 3.2 vs step 4 ordering conflict for writes.** 3.2: *"construct the input model first to validate"*; 4/Traps: *"`require_tier` is called before request construction, always"* / *"construct nothing before the gate."* For a write tool these collide. I resolved in favor of gate-first (before even pydantic validation) since the Traps wording is absolute, but the skill should say which wins.
+
+6. **Step 2 tool split assumes spec grouping.** *"one module per API domain, mirroring how the spec groups paths."* I mirrored the root `_links` index groups instead — worked fine, skill should name the fallback.
+
+7. **Version pinning misses response headers.** Step 1: *"page footers often print `vers: X.Y.Z`."* Reverb sends `x-reverb-version: 3.0` on every response — a far better source than footers.
+
+8. **Minor:** the skill mandates `spec/README.md` + `scripts/update_openapi.py` artifacts that can't exist here; the honest equivalent (probe captures + regeneration commands) is unstated. And FastMCP import paths are point-in-time facts the SDK 2.0 rename just invalidated.
+
+# 3. Suggested skill edits (severity-ranked)
+
+**HIGH — §1 "Vendor the spec": add a spec-less branch.** After the opening paragraph: "If no machine-readable spec exists (docs-prose-only vendors, hypermedia APIs), the ground truth becomes vendored probe captures: probe each endpoint once, commit raw responses under `probes/` with date and the exact curl that regenerates each, and derive the surface inventory from the API's root/hypermedia index where one exists. Every downstream 'read the spec entry' step then means 'read the probe capture'; date-stamp every shape you encode."
+
+**HIGH — §3 item 4: add headers to the assertion list.** Change to "…asserting method, exact path, exact query pairs, exact JSON body, **and required headers (auth present, media type, version header)** — header-versioned APIs serve a different contract when the version header is missing, and only a header assertion catches it."
+
+**HIGH — §4: resolve the gate-ordering conflict.** Add: "For write tools this reorders step 3: `require_tier` comes before even input-model construction — gate → input model → request. A refusal must prove nothing ran, not just that nothing was sent."
+
+**MEDIUM — §6: add a hypermedia bullet.** "On HAL/JSON:API surfaces, the `next` link is the pagination authority — prefer it over computed page math; `total_pages` can be server-clamped while deeper pages still serve (observed: clamp at 50 with `_links.next` still present). Strip `_links` from tool results and surface a distilled `has_next` — hypermedia links bloat every resource and mean nothing to an MCP client."
+
+**MEDIUM — §1 version pinning: add response headers as a source.** "…or a version response header (`x-&lt;vendor&gt;-version`), which is more reliable than page footers."
+
+**LOW — §2 tools split:** append "— or, spec-less, how the API's root index or nav groups resources."
+
+**LOW — Traps: add an SDK-drift entry.** "MCP SDK import paths are point-in-time facts — SDK 2.0 moved `mcp.server.fastmcp.FastMCP` to `mcp.server.mcpserver.MCPServer` and snake_cased `ToolAnnotations` fields (camelCase kept only as constructor aliases). Verify against the installed SDK; don't quote import paths from memory."
+
+Rules were kept: no write method ever hit the live API (the write path was exercised only under respx), the token was never printed (checked via `cut -d= -f1` only; SecretStr in config), and all work stayed inside the target directory.</result>
+<usage><subagent_tokens>74192</subagent_tokens><tool_uses>47</tool_uses><duration_ms>461893</duration_ms></usage>
+</task-notification>
