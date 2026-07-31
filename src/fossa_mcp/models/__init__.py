@@ -241,6 +241,64 @@ class PolicyEnableInput(BaseModel):
     enable_status_check: bool = True
 
 
+class PackageBlockInput(BaseModel):
+    """Input model for fossa_block_package.
+
+    `package_locator` is deliberately versionless. FOSSA carries the version
+    scope in the body (`versions`), not in the locator, so accepting
+    `pip+aiofile$1.2.3` here would send the version to the server as part of the
+    package identity and create a rule that matches nothing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    package_locator: str = Field(min_length=1)
+    policy_ids: list[int] = Field(min_length=1)
+    versions: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _validate_locator_and_versions(self) -> "PackageBlockInput":
+        if "$" in self.package_locator:
+            raise ValueError(
+                "package_locator must be versionless (e.g. 'pip+aiofile', not "
+                "'pip+aiofile$1.2.3'); scope the block with versions=['1.2.3'] instead"
+            )
+        if any(policy_id < 1 for policy_id in self.policy_ids):
+            raise ValueError("policy_ids must all be >= 1")
+
+        if self.versions is not None:
+            # FOSSA accepts `[]` and treats it as every version. That makes an
+            # accidentally-empty list silently block the whole package, so an
+            # empty list is rejected here and omitting the argument is the only
+            # way to ask for every version.
+            if not self.versions:
+                raise ValueError(
+                    "versions must name at least one version; omit it to block every version"
+                )
+            if any(not version.strip() for version in self.versions):
+                raise ValueError("versions must not contain blank entries")
+
+        return self
+
+
+class PackageUnblockInput(BaseModel):
+    """Input model for fossa_unblock_package."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    package_locator: str = Field(min_length=1)
+    policy_id: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _validate_locator(self) -> "PackageUnblockInput":
+        if "$" in self.package_locator:
+            raise ValueError(
+                "package_locator must be versionless (e.g. 'pip+aiofile', not "
+                "'pip+aiofile$1.2.3'); a block rule is removed for the whole package"
+            )
+        return self
+
+
 class AttributionReportInput(BaseModel):
     """Input model for fossa_get_attribution_report."""
 

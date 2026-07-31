@@ -188,6 +188,9 @@ EXPECTED_WRITE_TOOL_NAMES = {
     "fossa_export_audit_logs",
     "fossa_share_sbom_revision",
     "fossa_set_license_conclusion",
+    # packages
+    "fossa_block_package",
+    "fossa_unblock_package",
 }
 
 # The subset that must advertise destructiveHint=True: everything that removes
@@ -421,6 +424,9 @@ WRITE_TOOL_CALL_ARGUMENTS: dict[str, dict[str, Any]] = {
         "license_id": "MIT",
         "project_locator": PROJECT,
     },
+    # packages
+    "fossa_block_package": {"package_locator": "pip+aiofile", "policy_ids": [266648]},
+    "fossa_unblock_package": {"package_locator": "pip+aiofile", "policy_id": 266648},
 }
 
 
@@ -446,6 +452,11 @@ async def test_tools_list_partitions_into_declared_read_and_write_tools():
         assert tool.annotations.readOnlyHint is expected_read_only, (
             f"{tool.name} advertises readOnlyHint={tool.annotations.readOnlyHint}"
         )
+        if tool.name in EXPECTED_WRITE_TOOL_NAMES:
+            expected_destructive = tool.name in EXPECTED_DESTRUCTIVE_TOOL_NAMES
+            assert tool.annotations.destructiveHint is expected_destructive, (
+                f"{tool.name} advertises destructiveHint={tool.annotations.destructiveHint}"
+            )
 
         if expected_read_only:
             continue
