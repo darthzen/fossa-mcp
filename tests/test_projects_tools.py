@@ -400,14 +400,29 @@ async def test_apply_project_label_brackets_a_single_locator(
 
 
 @pytest.mark.asyncio
-async def test_apply_project_label_rejects_the_wildcard(
+async def test_apply_project_label_refuses_an_unbounded_target_set(
     writable_settings, respx_mock, make_context
 ):
+    """Empty, blank, and `"all"` target sets are refused before any HTTP call.
+
+    FOSSA does not enforce the locator list as required: a `PUT
+    /v2/projects/labels` with none would label every project matching the
+    filters, and this tool sends no filters, so that is the whole organization.
+    `"all"` is worse — it ignores filters outright. The refusal must therefore
+    happen client-side, and it must happen before a request is built.
+    """
     client = FossaClient(writable_settings)
+    ctx = make_context(client, writable_settings)
+
+    with pytest.raises(ValueError, match="at least one project"):
+        await projects.apply_project_label(ctx, 4, [])
+
+    with pytest.raises(ValueError, match="blank"):
+        await projects.apply_project_label(ctx, 4, [PROJECT, "   "])
+
     with pytest.raises(ValueError, match="wildcard"):
-        await projects.apply_project_label(
-            make_context(client, writable_settings), 4, [PROJECT, "all"]
-        )
+        await projects.apply_project_label(ctx, 4, [PROJECT, "all"])
+
     await client.aclose()
 
     assert respx_mock.calls.call_count == 0

@@ -24,21 +24,40 @@ ProjectExportFormat = Literal["json", "csv"]
 ProjectAssociationSection = Literal["labels", "release_groups", "last_published"]
 
 
-def _check_locators(locators: list[str], field_name: str) -> list[str]:
+def check_project_locators(locators: list[str], field_name: str) -> list[str]:
     """Validate an explicit list of project locators for a bulk operation.
 
-    Rejects `"all"`, which the bulk endpoints accept as "every project matching
-    the filters". None of these tools expose that mode, so a caller who passes
-    the literal string is told rather than silently having it treated as an
-    ordinary locator.
+    This is the client-side guarantee behind DECISIONS.md §5's "the bulk
+    endpoint's apply-to-all-filters mode is deliberately not exposed", and it is
+    load-bearing because **FOSSA does not enforce `locators` as required**,
+    whatever the spec says. Verified live: omitting the parameter returns `200`
+    and applies the change to every project matching the filters, which for a
+    call that sends no filters is the entire organization. An empty or
+    all-blank list would build exactly that request, so it is refused here,
+    before anything is sent.
+
+    `"all"` is refused for the same reason and is worse: it ignores the filters
+    outright. A live `PUT /v2/projects/policy` carrying `locators=all` alongside
+    a `title` filter matching one project re-policied all 11 projects in the
+    organization.
     """
     if not locators:
-        raise ValueError(f"{field_name} must name at least one project")
+        raise ValueError(
+            f"{field_name} must name at least one project. FOSSA does not enforce the "
+            "locator list as required: with an empty one the request would apply to "
+            "every project matching the filters, and with no filters that is every "
+            "project in the organization."
+        )
     if any(not locator.strip() for locator in locators):
-        raise ValueError(f"{field_name} must not contain blank entries")
+        raise ValueError(
+            f"{field_name} must not contain blank entries. A blank locator is dropped by "
+            "the server and widens the operation toward every project in the organization."
+        )
     if any(locator.strip().lower() == "all" for locator in locators):
         raise ValueError(
-            f'{field_name} must be explicit project locators; the wildcard "all" is not accepted'
+            f'{field_name} must be explicit project locators; the wildcard "all" is not '
+            "accepted. It addresses every project in the organization and ignores any "
+            "filter sent with it."
         )
     return locators
 
@@ -164,7 +183,7 @@ class ProjectBulkDeleteInput(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> "ProjectBulkDeleteInput":
-        _check_locators(self.project_locators, "project_locators")
+        check_project_locators(self.project_locators, "project_locators")
         return self
 
 
@@ -178,7 +197,7 @@ class ProjectLabelApplyInput(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> "ProjectLabelApplyInput":
-        _check_locators(self.project_locators, "project_locators")
+        check_project_locators(self.project_locators, "project_locators")
         return self
 
 

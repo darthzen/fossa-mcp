@@ -222,6 +222,9 @@ async def test_bulk_assign_requires_versioned_locators(writable_settings, respx_
     with pytest.raises(ValueError, match='"all" is not accepted'):
         await labels.bulk_assign_package_label(ctx, 3, ["all"], "org")
 
+    with pytest.raises(ValueError, match="at least one package"):
+        await labels.bulk_assign_package_label(ctx, 3, [], "org")
+
     await client.aclose()
     assert respx_mock.calls.call_count == 0
 

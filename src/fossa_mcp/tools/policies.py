@@ -29,6 +29,7 @@ from ..models import (
     PolicyEvaluateInput,
     SecurityPolicyReadInput,
 )
+from ..models.projects import check_project_locators
 from ..policy import (
     FossaSecurityBaseline,
     PolicyEvaluation,
@@ -270,14 +271,14 @@ async def assign_security_policy_to_projects(
     block nothing.
 
     This tool deliberately does not expose the endpoint's "apply to all projects
-    matching these filters" mode. Every target must be named explicitly.
+    matching these filters" mode. Every target must be named explicitly, and an
+    empty or all-blank list is refused rather than sent — FOSSA does not enforce
+    the locator list as required, so the resulting request would re-policy every
+    project in the organization.
     """
     if security_policy_id < 1:
         raise ValueError("security_policy_id must be >= 1")
-    if not project_locators:
-        raise ValueError("project_locators must name at least one project")
-    if any(not locator.strip() for locator in project_locators):
-        raise ValueError("project_locators must not contain blank entries")
+    check_project_locators(project_locators, "project_locators")
 
     lifespan_ctx = ctx.request_context.lifespan_context
     client: FossaClient = lifespan_ctx["client"]

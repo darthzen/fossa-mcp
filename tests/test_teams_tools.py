@@ -532,6 +532,34 @@ async def test_update_team_assignments_rejects_fields_from_another_target(
 
 
 @pytest.mark.asyncio
+async def test_update_team_assignments_refuses_an_unbounded_project_set(
+    admin_settings, respx_mock, make_context
+):
+    """A projects call must name a bounded target set, and do it before any HTTP.
+
+    Naming no selector at all would send `filters: {}` — every project in the
+    organization — and an empty locator list is the same widening spelled
+    differently. `all_projects` remains the one explicit way to address them
+    all, and it carries the DESTRUCTIVE tier.
+    """
+    client = FossaClient(admin_settings)
+    ctx = make_context(client, admin_settings)
+
+    with pytest.raises(ValueError, match="exactly one of projects"):
+        await teams.update_team_assignments(ctx, TEAM_ID, "projects", "remove")
+
+    with pytest.raises(ValueError, match="at least one project locator"):
+        await teams.update_team_assignments(ctx, TEAM_ID, "projects", "remove", projects=[])
+
+    with pytest.raises(ValueError, match="blank entries"):
+        await teams.update_team_assignments(ctx, TEAM_ID, "projects", "remove", projects=["  "])
+
+    await client.aclose()
+
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
 async def test_update_team_assignments_release_groups_add_posts(
     admin_settings, respx_mock, make_context
 ):

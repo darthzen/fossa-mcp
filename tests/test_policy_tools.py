@@ -358,9 +358,16 @@ async def test_assign_policy_to_projects_query_and_partial_failure(
 
 
 @pytest.mark.asyncio
-async def test_assign_policy_rejects_empty_and_blank_locators(
+async def test_assign_policy_refuses_an_unbounded_target_set(
     writable_settings, respx_mock, make_context
 ):
+    """No request is built for an empty, blank, or wildcard target set.
+
+    `PUT /v2/projects/policy` does not enforce its locator list: sent without
+    one it re-policies every project matching the filters, and `locators=all`
+    ignores the filters entirely. DECISIONS.md §5 promises that mode is
+    unreachable from this tool; this is the assertion behind the promise.
+    """
     client = FossaClient(writable_settings)
     ctx = make_context(client, writable_settings)
 
@@ -369,6 +376,9 @@ async def test_assign_policy_rejects_empty_and_blank_locators(
 
     with pytest.raises(ValueError, match="blank"):
         await policies.assign_security_policy_to_projects(ctx, 9, [PROJECT, "  "])
+
+    with pytest.raises(ValueError, match="wildcard"):
+        await policies.assign_security_policy_to_projects(ctx, 9, ["all"])
 
     await client.aclose()
     assert respx_mock.calls.call_count == 0
