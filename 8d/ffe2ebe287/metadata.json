@@ -3,7 +3,7 @@
   "checkpoint_id": "8dffe2ebe287",
   "strategy": "manual-commit",
   "branch": "skills-hardening",
-  "checkpoints_count": 1,
+  "checkpoints_count": 12,
   "files_touched": [
     "skills/fossa-api-audit/SKILL.md",
     "skills/fossa-attribution/SKILL.md",
@@ -19,13 +19,20 @@
       "compact_transcript": "/8d/ffe2ebe287/0/transcript.jsonl",
       "content_hash": "/8d/ffe2ebe287/0/content_hash.txt",
       "prompt": "/8d/ffe2ebe287/0/prompt.txt"
+    },
+    {
+      "metadata": "/8d/ffe2ebe287/1/metadata.json",
+      "transcript": "/8d/ffe2ebe287/1/full.jsonl",
+      "compact_transcript": "/8d/ffe2ebe287/1/transcript.jsonl",
+      "content_hash": "/8d/ffe2ebe287/1/content_hash.txt",
+      "prompt": "/8d/ffe2ebe287/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 197,
-    "cache_creation_tokens": 225520,
-    "cache_read_tokens": 16800759,
-    "output_tokens": 76407,
-    "api_call_count": 104
+    "input_tokens": 292,
+    "cache_creation_tokens": 457464,
+    "cache_read_tokens": 21602209,
+    "output_tokens": 135992,
+    "api_call_count": 155
   }
 }

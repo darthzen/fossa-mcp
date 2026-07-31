@@ -1,0 +1,556 @@
+The job interviewer around this project asked for skills to go along with the mcp server. She suggested internal assessment skills, notably an API coverage to verify all the endpoints are alive and accessible. For customers, she suggested a focus on vulnerability metadata (for example, build a json paylod to use when comparing to other vendors' results), and skills around licensing issues.
+
+Given those paramters, what skills do you think would be valuable to add?
+
+---
+
+Go and create all five. Use subagents
+
+---
+
+<task-notification>
+<task-id>aa1e502d45e7c730b</task-id>
+<tool-use-id>toolu_01QnyW4ojQHqF2TP4sygs2F2</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/aa1e502d45e7c730b.output</output-file>
+<status>completed</status>
+<summary>Agent "Write fossa-license-review skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Created `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/skills/fossa-license-review/SKILL.md` (nothing else touched). It follows the fossa-suggest-score/fossa-protect house style: frontmatter with "Use when..." triggers covering license audit / can-we-ship / GPL-AGPL-copyleft / compliance / M&amp;A due diligence; a "why this exists" and "honest framing" preamble; five numbered procedural sections (distribution model first with the SaaS/AGPL exception and static-vs-dynamic LGPL linkage; findings via `fossa_project_posture` + `fossa_list_issues(category="licensing", ...)` + paged `fossa_list_dependencies`; five obligation classes in a table aligned with the LIS rubric's copyleft tiers, including Apache-2.0 NOTICE/patent notes, dual-licensing election, and license-change-on-upgrade (BUSL/SSPL); the obligation × distribution × role cross with the relicense/replace/isolate/attribute remediation menu; and a verdict-first report format with the one-paragraph noise explanation and a standalone unknowns block). Traps covers the revision_locator requirement, discovered-vs-declared mismatches, unlicensed ≠ permissive, SaaS ≠ safe with AGPL, dev-tool copyleft noise, the direct/deep vs direct/transitive vocabulary split, and pagination; Scope states the not-legal-advice position exactly once and the no-write/no-code-edit boundaries. Cross-links to [[fossa-suggest-score]] (quantitative ranking) and [[fossa-attribution]] (NOTICE-file follow-on) are in place. Three repo facts contradict the brief: (1) the issue category enum is `licensing`/`vulnerability`/`quality` — there is no `security` category (the skill says so explicitly); (2) `src/fossa_mcp/models/` does not exist as a package — git tracks a single `src/fossa_mcp/models.py`, and the untracked `models/` directory contains only `__pycache__`, despite commit bb9af86's message claiming a package split; (3) `fossa_list_dependencies` takes only a full `revision_locator` (no `project_locator` parameter), which the skill's tool examples reflect.</result>
+<usage><subagent_tokens>59771</subagent_tokens><tool_uses>16</tool_uses><duration_ms>151381</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a3a351a7ad8ac2b47</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a3a351a7ad8ac2b47.output</output-file>
+<status>completed</status>
+<summary>Agent "Write fossa-api-audit skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Created `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/skills/fossa-api-audit/SKILL.md` (only file touched), matching the house style of the two reference skills: frontmatter with "Use when..." triggers, an opening "why this exists" plus honest-framing block, six numbered procedural sections with runnable commands (spec enumeration one-liner verified against the real spec: 191 paths, 271 ops, 157 GET/114 write at 4.34.55), a Traps section built from repo-verified gotchas, and a Scope section (no mutations, no spec regeneration without asking, no code changes). Several brief facts contradicted the repo and the skill reflects reality instead: the working tree is on branch `block-package-tools` (not `api-parity` as the snapshot said), and that branch has **no** `spec/fossa-openapi.json`, no `writes.py`, no `policies.py`/`release_groups.py`, no `API_PARITY_PLAN.md`, and no refusal tests — those all live on the `api-parity` and `security-policy-writes` branches, where `server.py` registers **13** tools (9 read + 4 policy, two of them gated writes), not 9; `release_groups.py` exists there but is unregistered, as the brief said. The env var is `FOSSA_API_TOKEN` (`Settings.fossa_api_token`, Bearer auth, `.env` supported) — `$FOSSA_API_KEY` from the brief does not exist anywhere. The write-gate env vars are `FOSSA_ALLOW_WRITES`/`FOSSA_ALLOW_DESTRUCTIVE`/`FOSSA_ALLOW_ADMIN` as stated; refusal tests in `tests/test_policy_tools.py` assert `respx_mock.calls.call_count == 0` but also assert the tier is off, so an exported `FOSSA_ALLOW_WRITES=true` fails them — the skill runs them under `env -u`. Two extra verified traps made it in: `fossa_list_projects` legitimately issues documented `POST /v2/projects` as a read fallback, and 6 of 157 GET ops (including `GET /projects/{locator}`) declare empty 200 schemas, confirming the spec-gap-not-server-bug rule. Because of the branch divergence, the skill derives spec, tool list, and tool-to-path mapping at runtime, requires naming the audited branch in the report, and treats a missing spec or missing write surface as a reportable branch fact rather than a failure.</result>
+<usage><subagent_tokens>74451</subagent_tokens><tool_uses>24</tool_uses><duration_ms>296062</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ab4e8c22b31652560</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/ab4e8c22b31652560.output</output-file>
+<status>completed</status>
+<summary>Agent "Write fossa-vuln-export skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Created the skill at `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/skills/fossa-vuln-export/SKILL.md` with `references/field-mapping.md` beside it, matching the fossa-suggest-score/fossa-protect house style (frontmatter with "Use when..." triggers covering export/compare/VDR-OSV-CycloneDX/vendor-comparison phrasing, a "why this exists" plus "honest framing" preamble, numbered procedure with exact tool calls, Traps, Scope, and [[fossa-suggest-score]] cross-links for prioritization hand-off). Mode 1 covers locator resolution, posture-first retrieval with mechanical truncation detection, paging `fossa_list_issues`, joining issues to dependencies, a 14-row fetcher→purl table (npm scopes, pip/PEP 503, go, mvn colon, cargo, gem, nuget, composer, hex, pod, git/github-vs-generic, apk/deb/rpm, generic fallback), and OSV-primary / CycloneDX-1.6-VDR-secondary emission with reconciliation arithmetic; mode 2 normalizes both sides to (version-stripped purl, alias-resolved id) keys and reports overlap counts first, then severity, FOSSA-only (spot-check discipline), vendor-only (scope-difference discipline), and provenance. The reference file holds the three-way FOSSA→OSV→CycloneDX field table and per-vendor key-extraction paths for Grype/Trivy/Snyk/CycloneDX/SARIF/OSV. Repo facts contradicting the brief: (1) the issue category enum is `licensing | vulnerability | quality` — there is no `security` category, so the skill uses `category="vulnerability"` and traps the wrong name; (2) `top_issue_count` is validated to a max of 25 (`models.py` PostureInput), so "high top_issue_count" means 25 with mandatory paging beyond it; (3) models live in the single tracked `src/fossa_mcp/models.py` — `src/fossa_mcp/models/issues.py` does not exist (the `models/` dir holds only a stale `__pycache__`, and git HEAD on disk is `4c03bdf`, not the `00dcbb0` release-groups commit the session snapshot showed); (4) `fossa_list_dependencies` passes `revision_locator` verbatim as a path parameter (no `split_revision_locator` normalization), so it requires the full `project$revision` form — added as a trap; also noted the 202/`analysis_in_progress` state and the active-only (ignored-issues-excluded) default, both from the tool code.</result>
+<usage><subagent_tokens>72174</subagent_tokens><tool_uses>17</tool_uses><duration_ms>308639</duration_ms></usage>
+</task-notification>
+
+---
+
+Create your own branch for these skills and commit them there. None of the other work will overlap, so it can be merged in while the rest is being worked on
+
+---
+
+Can we put symlinks to the actual files in the .claude directory? I'd rather not have to worry about two sets of files getting out of sync.
+
+---
+
+Can you submit a pr to merge skills into main?
+
+---
+
+Merged. Now, go run the skills and evaluate them for improvements. Use subagents
+
+---
+
+<task-notification>
+<task-id>aa0da895c8fc07b2a</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/aa0da895c8fc07b2a.output</output-file>
+<status>completed</status>
+<summary>Agent "Run and evaluate fossa-spec-drift" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The run is complete and the tree is restored. Here is the structured evaluation.
+
+---
+
+## 1. VERDICT
+
+**The procedure completed end-to-end.** Every step executed; nothing had to be invented beyond one undefined variable (below). Actual drift reported by the skill's own pipeline:
+
+- Version: **4.34.55 → 4.34.55**; operations **271 → 271** (191 paths, matching the skill's reference numbers exactly)
+- ADDED 0, REMOVED 0, CHANGED 0 — the fetched spec is byte-identical to the vendored one (git showed `spec/fossa-openapi.json` unmodified after the fetch; only `spec/README.md` changed, timestamp only)
+- Breakage: none. Action-required: none. Per step 5's own blessing of the empty case: *"no drift affecting registered tools between 4.34.55 and 4.34.55"* is the whole finding.
+- Correctly-flagged spec-absent tools: `fossa_block_package` / `fossa_unblock_package` (3 endpoint literals in `packages.py`, none in the spec — the "inferred endpoint" trap fired exactly as designed).
+
+Note: the zero-drift outcome exercises the happy path but not the ADDED/REMOVED/CHANGED classification logic with real payloads.
+
+## 2. FRICTION LOG
+
+1. **`$SCRATCHPAD` is used but never defined.** Step 1: `cp spec/fossa-openapi.json "$SCRATCHPAD/spec-baseline.json"`. In a fresh shell this expands to `cp ... "/spec-baseline.json"` and fails on read-only root. I had to improvise (exported it to my session scratchpad). The skill should say what `$SCRATCHPAD` is or tell the agent to set it.
+
+2. **The branch inventory is factually wrong for the current repo — same-day stale.** Step 1: *"on `block-package-tools` (checked 2026-07-31) `spec/` holds only a three-line README stub and there is no JSON at all."* False: on `block-package-tools` right now, `spec/fossa-openapi.json` and the 9-line vendored README are both **tracked and clean** (added in `340518d`, which is an ancestor of this branch). Same for the Traps line *"`API_PARITY_PLAN.md` exist[s] on `api-parity` and `security-policy-writes` but not on `main` or `block-package-tools`"* — `git ls-files API_PARITY_PLAN.md` shows it tracked here. The `git ls-files spec/` check (which the skill does mandate) is what saved the run; the hardcoded inventory would have misled a trusting agent into announcing "no baseline" on a branch that has one. This also means the intended "branch without the spec" scenario could not be exercised — the drift-vs-reality of the skill's own facts is itself the finding.
+
+3. **The embedded Python diff script runs unmodified.** Saved verbatim, ran with the exact command given, exit 0, correct output. No friction. Its `$ref` claims verified: 0 `$ref` occurrences, 48 orphaned `components/schemas`.
+
+4. **Tool cross-referencing: the greps work but have a real blind spot.** Grep 1 and grep 2 both ran as written. 12 of 15 endpoint literals mapped cleanly onto spec paths; the 3 misses were precisely the inferred package-blocking endpoints. However:
+   - **`posture.py` is invisible to grep 2.** It passes method and path as separate arguments (`client.request_json_with_status("GET", "/v2/issues/categories", ...)`), so the pattern `'"(GET|PUT|POST|PATCH|DELETE) /'` matches nothing in it. The skill's prose covers this (*"fossa_project_posture has no endpoint of its own, it composes the issues and dependencies calls"*) — but the prose is **incomplete**: posture also hits `GET /v2/issues/categories` (posture.py:50–51), a real spec path used by **no other tool**. Drift on that operation would be silently missed by this procedure.
+   - **The tool inventory is stale.** *"The 9 current read tools resolve to 8 spec paths"* — server.py registers **15** tools on this branch (11 `_READ_ONLY`, 4 gated writes), and the skill never mentions `policies.py` (whose line 119 is a composite two-endpoint string, `"GET /projects/{locator} + GET /organizations/{id}/settings/..."`, needing manual splitting) or `packages.py` (three literals across two tools). The "build the map from the source, not from memory" instruction is what keeps this survivable.
+
+5. **Minor:** the update script emits a `datetime.utcnow()` DeprecationWarning on stderr; the skill's "facts about the script" list doesn't mention it, and a cautious agent might mistake it for a partial failure. Also, step 6 only inspects `git status --short spec/`; nothing tells the agent to record the *whole-tree* status before step 2 (the harness brief did; the skill didn't).
+
+6. **Traps that proved correct:** README-overwrite (README was the only modified file; restoring only the JSON would indeed have left a half-restore), operations-not-paths (271 vs 191 confirmed), inferred-endpoint trap (fired on real tools), and the "changed is necessary, not sufficient" caveat (untestable this run — zero changes).
+
+## 3. OUTPUT QUALITY
+
+Good with real data. The mandated order (version + counts → breakage → action-required → opportunities → no-tool remainder) collapses gracefully in the empty case, and the skill explicitly authorizes the one-line "no drift" statement instead of forcing padded sections — that is the right call. Two small weaknesses: "between X and Y" reads oddly when X = Y, and the skill never suggests the cheapest identity check available — the README's SHA-256 (or `git status` on the JSON) proves byte-identity faster than the operation diff does.
+
+## 4. SUGGESTED EDITS (severity-ranked)
+
+1. **HIGH — Step 1:** define `$SCRATCHPAD` (e.g. "set `SCRATCHPAD` to your session scratchpad directory") before first use.
+2. **HIGH — Step 1 + Traps:** delete the hardcoded per-branch file inventory; make `git ls-files spec/ API_PARITY_PLAN.md` the sole authority (the inventory went stale within a day of "verified").
+3. **HIGH — Step 4:** cover `posture.py`'s separate-argument calls — name all three endpoints incl. `GET /v2/issues/categories`, or add a second grep such as `grep -rn 'request_json.*"GET"' src/fossa_mcp/tools/posture.py`.
+4. **MEDIUM — Step 4:** drop "9 read tools → 8 spec paths"; state that the greps define the current surface and counts must come from them.
+5. **MEDIUM — Step 4:** name `fossa_block_package`/`fossa_unblock_package` as the concrete "not covered by the spec" tools and link them to the inferred-endpoint trap.
+6. **LOW — Step 4:** note `policies.py:119` is a composite two-endpoint string that must be split before mapping.
+7. **LOW — Step 2:** note the harmless `utcnow` DeprecationWarning so it isn't read as failure.
+8. **LOW — Step 6:** record full-tree `git status --short` before step 2, not just `spec/`.
+9. **LOW — Step 5:** suggest the README SHA-256 as a fast byte-identity check when versions match.
+
+## 5. WHAT WORKED
+
+The quantitative core is excellent: every checkable number was exact (4.34.55 / 191 paths / 271 operations / 0 refs / 48 orphan schemas), the embedded diff script ran verbatim on the first try, and the restore procedure left the tree provably clean. The traps section earns its length — three of six traps demonstrably prevented real mistakes during this run — and the instruction to rebuild the tool map from source rather than trust the prose is what kept the stale inventory from causing wrong output. The empty-result reporting guidance avoided a padded non-report.
+
+## 6. WORKING TREE
+
+Before (recorded at start, branch `block-package-tools`):
+```
+?? .venv
+?? skills/
+```
+After step 6 restore (identical; `spec/README.md` timestamp confirmed back to `2026-07-31T18:45:49Z`):
+```
+?? .venv
+?? skills/
+```
+Nothing committed, nothing staged. Scratch artifacts (`spec-baseline.json`, `spec_drift.py`) live only in `/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/scratchpad/eval-spec-drift/`. Key files referenced: `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-spec-drift/SKILL.md`, `.../src/fossa_mcp/tools/posture.py` (lines 50–51, the missed endpoint), `.../src/fossa_mcp/server.py` (15 registrations vs the documented 9).</result>
+<usage><subagent_tokens>41863</subagent_tokens><tool_uses>12</tool_uses><duration_ms>189678</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a60f50a75a229b63d</task-id>
+<tool-use-id>toolu_01JSuzeJQZ3uRA2krxLmCeAD</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a60f50a75a229b63d.output</output-file>
+<status>completed</status>
+<summary>Agent "Run and evaluate fossa-license-review" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>The audit is complete and the report is written. Here is the structured evaluation.
+
+---
+
+## 1. VERDICT
+
+**The audit completed end-to-end.** Target: **niffler** (org max, 16 licensing issues). Real numbers:
+
+- **165/165 dependencies** read (two pages), **16/16 active licensing issues** enumerated, analysis_state complete.
+- **Findings breakdown:** 14 × LGPL-3.0-or-later `policy_flag` (`@img/sharp-*` libvips binaries, all transitive depth 3), 1 × MPL-2.0 `policy_flag` (`next`, direct), 1 × `policy_conflict` CC-BY-SA-4.0 discovered in `next` (direct). Whole-inventory obligation classes: 27 packages weak-copyleft-bearing (14 LGPL + 12 MPL lightningcss + next), ~135 permissive-with-attribution, a handful public-domain-equivalent, **0 unknown/unlicensed, 0 strong copyleft, 0 AGPL**.
+- **Actions: 0 under inferred internal-only; 0 under SaaS-only.** The internal→SaaS **model swap did NOT change the action list** for this dataset — the skill's cross only produces a different action list when AGPL is present or when the swap crosses the distributed/not-distributed line. Counterfactual "publicly distributed" changes it dramatically (0 → LGPL source-availability, 12 MPL attributions, ~150 attribution rows, CC-BY-SA resolution). So the skill's central claim holds structurally, but its marquee SaaS-vs-internal distinction was a no-op here; the skill never says the two low tiers are action-identical absent AGPL.
+
+Report: `/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/scratchpad/eval-license-review/niffler-license-audit.md`
+
+## 2. FRICTION LOG
+
+1. **No project-discovery procedure.** Step 2: "Resolve the project first — never guess a locator: `fossa_list_projects(title=...)`" and "Ask which project if it isn't named." For "which project has licensing problems" there is no path; I had to find `sort="issues-licensing_desc"` in the tool schema myself. (fossa-suggest-score explicitly gives `sort="issues-total_desc"`.)
+2. **No-user + no-repo gap in step 1.** "so ask — or infer from the repo, deployment config, or what the user has already said" — covers no-user only if the repo is on disk. Niffler's repo is not local; I inferred from FOSSA commit messages, which the skill neither authorizes nor forbids. It has good "pick the likelier default, say so" language for *linkage* but not for the *distribution model itself*.
+3. **`fossa_list_dependencies(count=100)` is unusable as prescribed.** The skill's exact call blew the tool-output token limit twice (126,288 and 73,198 chars saved to overflow files). "Page until the list is exhausted" works, but the skill should warn that the payload is huge and advise field-stripping/jq processing rather than inline reads.
+4. **`state: "analysis_in_progress"` — wrong field name.** Posture returns `analysis_state: "complete"`. The quoted key `state` does not appear; a literal reader greps for the wrong field.
+5. **Classification table cannot classify the actual finding.** The only `policy_conflict` in the dataset is **CC-BY-SA-4.0**, which appears in none of the five classes; FTL, WTFPL, blueoak-1.0.0, CC-BY-4.0, Unicode-DFS-2016, W3C-20150513, and `public-domain` are also present and unmapped. The catch-all bucket is defined as "no license found, custom text, 'SEE LICENSE IN ...'" — a *known* SPDX license absent from the table has no home. Share-alike content licenses are a real hole (line 119–120 vicinity, step 3 table).
+6. **No `conclusions` trap.** `next` carries a scoped FOSSA license conclusion of MIT (updatedAt 2026-06-09) while both its licensing issues remain active. The skill never says to check `conclusions`, so a fresh agent can recommend remediating something already adjudicated in FOSSA. This is exactly the kind of response-field trap the Traps section exists for, and it is missing.
+7. **"Runtime vs dev/build-only (`depths` and the manifest tell you...)"** (step 4.2) — `depths` does **not** tell you dev vs runtime; FOSSA's npm data here carries no dev/prod flag, and with no local repo there is no manifest. I classified `typescript`/`vitest`/`@types/*` as dev purely from name knowledge. The instruction asserts data availability that doesn't exist.
+8. **`policy_conflict` issues have empty `details`** (`"details":""` on issue 19366964), so the per-issue obligation text the workflow leans on is blank for exactly the conflict type; the skill doesn't mention the `policy_flag` vs `policy_conflict` type distinction at all.
+9. **Dual-license bullet can't distinguish AND from OR.** "FOSSA may list both licenses on the dependency; the finding is 'no documented election'" — the sharp packages list `FTL + LGPL-3.0-or-later` which is an *aggregate* (both apply to different components), not an election. Following the bullet literally produces a wrong "elect FTL" recommendation. FOSSA's `licenses` array doesn't encode the distinction; the skill should say so.
+10. **Minor tension:** step 1 model 4 says attribution "technically attach[es] to copies" internally; step 4.1 says "no distribution, no NOTICE file to ship." Reconcilable but stated in opposite directions two sections apart.
+11. **Empty-table gap:** step 5 mandates the four-part report but gives no guidance for the (common, and actual) case where the action table and unknowns block are empty. I had to improvise a "hygiene, not obligation" tier to avoid an all-noise report with no payload.
+12. **Verified accurate** (credit where due): the both-locators trap for project-scope `fossa_list_issues` (worked exactly as stated), `licensing/vulnerability/quality` category enum, `direct/deep` vs `direct/transitive` depth vocabularies, `fossa_list_dependencies` having no `project_locator` param, default `count` 20, and the posture-first call pattern — all match the live schemas and behavior. One transient MCP transport drop on `fossa_get_dependency` was environmental, not the skill's fault.
+
+**Legal-mechanics check:** AGPL-reaches-SaaS, LGPL/MPL-don't, static-vs-dynamic LGPL relinking, unlicensed-equals-all-rights-reserved, Apache-2.0 NOTICE preservation, and GPL-2.0/3.0 incompatibility are all stated correctly and unambiguously.
+
+**Cross-consistency with fossa-suggest-score:** no contradictions. Copyleft tiers (strong = GPL/AGPL, weak = LGPL/MPL), the SaaS carve-out plus AGPL exception, and the internal/SaaS-as-lowest-distribution treatment match exactly; this skill's addition of EPL/CDDL to weak copyleft is an extension, not a conflict. One asymmetry worth noting: suggest-score's LIS has no term for the unknown/unlicensed bucket this skill calls "the dangerous bucket" — the quantitative track cannot score this skill's highest-concern class.
+
+## 3. OUTPUT QUALITY
+
+The mandated shape mostly works with real data. The **one-sentence verdict** and the **stated basis** block are genuinely good — the basis block forced me to state that the model was inferred from FOSSA metadata and what flips it, which is the skill's best feature. The **noise paragraph** is the standout: "14 LGPL flags = one sentence" guidance collapsed the sharp pile exactly as intended, and the resulting paragraph is quotable. Weaknesses with real data: an **empty action table** looks broken and the skill provides no fallback (a "nothing fires — here is what would fire if you ever distribute" framing had to be invented); an **empty unknowns block** likewise; and the CC-BY-SA conflict had no legitimate home in any of the four report sections since it is neither an action, pure noise, nor an unknown — it landed in an improvised hygiene list.
+
+## 4. SUGGESTED EDITS
+
+1. **High — Step 3 table:** add a share-alike/content row (CC-BY-SA, CC-BY) and map FTL, WTFPL, blueoak, Unicode-DFS, W3C, public-domain; redefine the last bucket as "unlicensed, custom, or any license not mapped above."
+2. **High — Traps:** add a `conclusions` trap — check `conclusions.scoped/base.licenses` on the dependency before recommending remediation; an existing conclusion changes the finding to "reconcile conclusion with policy."
+3. **High — Step 2:** replace `fossa_list_projects(title=...)`-only with a discovery branch: `sort="issues-licensing_desc"` when asked to find the project with licensing problems.
+4. **Medium — Step 2:** warn that `count=100` dependency pages overflow tool-output limits; instruct processing the saved payload with jq rather than inline reads.
+5. **Medium — Step 1:** add an explicit fallback when neither user nor repo is available — infer from FOSSA metadata, state the model as inferred, and show the counterfactual.
+6. **Medium — Step 4.2:** delete the claim that `depths` reveals dev vs runtime; say role comes from the manifest when on disk, otherwise from package knowledge, stated as judgment.
+7. **Medium — Step 5:** define the empty-action-table case ("nothing fires; state what would fire under the next model up") and give conflict-type findings a designated section.
+8. **Low — Step 2:** fix `state:` → `analysis_state:` for the in-progress check.
+9. **Low — Step 3 dual-license bullet:** note FOSSA's `licenses` array does not distinguish OR-elections from AND-aggregates; verify upstream before recommending an election.
+10. **Low — Step 4:** add one sentence that internal-only and SaaS-only produce identical action lists unless AGPL is present.
+
+## 5. WHAT WORKED
+
+The core mechanics are sound: every tool name, parameter, and vocabulary claim I could verify against live schemas was correct, and the two traps I actually hit in-flow (project-scope needs both locators; the dependency list pages beyond posture's top-N) fired exactly as documented and prevented exactly the mistakes they name. The obligation-class framing did real work — it collapsed 14 near-identical LGPL flags into one grouped judgment, kept the MPL lightningcss packages (unflagged by policy) inside the audit's scope via the "issues are not the audit" rule, and the discovered-vs-declared trap pointed straight at the one genuinely interesting finding (`next`'s CC-BY-SA conflict). The noise paragraph and stated-basis requirements produced the most useful parts of the final report.</result>
+<usage><subagent_tokens>98018</subagent_tokens><tool_uses>14</tool_uses><duration_ms>358070</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a0a5f566ea2f3cf65</task-id>
+<tool-use-id>toolu_01AUTdKUD6EUP62yXvRwAoju</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a0a5f566ea2f3cf65.output</output-file>
+<status>completed</status>
+<summary>Agent "Run and evaluate fossa-api-audit" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Note: claude-sonnet-5[1m] (the safety classifier) was unavailable when reviewing this subagent's work. Please carefully verify the subagent's actions and output before acting on them.
+
+The skill's example claim checks out — `examples` lives at the media-type level (12 keys vs ~57 live fields). Execution complete; working tree confirmed unchanged. Full evaluation follows.
+
+---
+
+# Evaluation: `skills/fossa-api-audit/SKILL.md` (executed end-to-end on branch `block-package-tools`)
+
+## 1. VERDICT
+
+**The procedure completed end-to-end, with one forced improvisation at step 4.** Audit results the skill produced:
+
+- **Spec surface:** API 4.34.55, 191 paths, 271 operations (157 GET / 114 write-method) — the skill's step-1 snippet ran verbatim and its claimed counts matched exactly.
+- **Registered surface:** **15 tools** (11 read, 4 gated write) — not the 9 the skill's Traps section claims for "the current working branch."
+- **Coverage:** **12 of 271 documented operations (10 of 157 GET)** touched by registered tools. **3 operations the server depends on are absent from the spec** (`POST /packages/{locator}/rules`, `GET /policies/{policyId}`, `PUT /policies/{policyId}/rules` — the block/unblock tools; their module docstring admits they were captured from web-app traffic). 259 documented operations have no tool; largest GET-only gaps: organizations 25, v1 revisions 17, project_group 12, v2/issues 11, binary 10, teams 9.
+- **Live:** 9 of 10 covered GET operations verified alive (200/ok, real org data: 11 projects, locator `git+github.com/darthzen/niffler`). Unverified: `GET /organizations/{id}/settings/projects/issues/security` (no token, no `FOSSA_ORG_ID`, no policy tools on the deployed server). Field comparison: 4 endpoints match spec exactly; `/projects/{locator}` returns ~57 fields against a property-less schema whose example documents only 12 — confirmed spec gap. Live oddity found: `GET /v2/issues` ignored `count=2` and returned 5 issues.
+- **Write gate: held.** `env -u … uv run pytest` — `test_policy_tools.py` 14 passed (6 zero-call assertions) **plus** `test_package_tools.py` 14 passed (9 zero-call assertions), zero HTTP requests. The second file was needed to prove the gate for all 4 gated tools; the skill names only the first.
+
+Nothing was mutated; tree left as found. Execution record: `/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/scratchpad/eval-api-audit/audit-matrix.md`
+
+## 2. FRICTION LOG
+
+1. **The missing-spec trap never fired — the environment brief was wrong.** `spec/fossa-openapi.json` is present and git-tracked on `block-package-tools` (3.2 MB, retrieved 2026-07-31 per `spec/README.md`). I dry-ran the fallback (`git show api-parity:spec/fossa-openapi.json` works), **but found a latent defect: the fallback writes to `"$TMPDIR/fossa-openapi.json"` while the very next command hardcodes `json.load(open("spec/fossa-openapi.json"))`** — an agent rescued by the trap immediately fails on step 1's snippet unless it silently edits the path. The trap gets you a file; nothing downstream reads it.
+2. **Traps: "9 on the current working branch, 13 on `api-parity`"** — stale on the branch it was run on: 15 tools here. The skill hardcodes the very numbers it warns against hardcoding ("hardcoding a tool list is how an audit reports last month"). The derive-from-`server.py` procedure saved it, but the wrong example numbers invite second-guessing.
+3. **Step 2's `grep -n 'from .tools import' src/fossa_mcp/server.py` is useless as written** — the import is a multi-line parenthesized block, so grep returns only line 17 (`from .tools import (`) and none of the module names. Had to read the file. Same for `grep -n 'request_json\|request_text'`: most calls are multi-line and the path argument is on the next line — the grep locates call sites but cannot produce the mapping the step asks for.
+4. **Step 2 / Traps: "`fossa_get_project` can issue up to four GETs (project, labels, release-groups, last-published)"** — false on this branch; `projects.py:127` issues exactly one GET. Branch-specific behavior stated as timeless fact.
+5. **Traps: "`fossa_list_projects` falls back to `POST /v2/projects` (documented) when the filter set outgrows the query string"** — false on this branch; `projects.py` has no POST branch at all (only `projects.py:95`, GET). An agent trusting this line would wrongly credit `POST /v2/projects` in the coverage count.
+6. **Intro: "several GET operations declare a bodyless or property-less 200 (6 of 157 at API 4.34.55)"** — not reproducible. Strictly-bare schemas: 4; loosely (no properties/items/$ref): 20, at the exact same spec version. The methodology behind "6" is unstated, so the number can't be checked or maintained.
+7. **Step 4's credential model failed entirely: "it also loads `.env`, so an unset shell variable does not mean the server has no token."** There is no `.env` (only `.env.example`), no shell variable, and the connected server is a **remote HTTP deployment** (`https://fossa-mcp.ash4d.com/mcp`) holding its token server-side. Every curl command in step 4 was unrunnable. The skill's only alternative — exercising MCP tools — it half-disqualifies ("a stale connected server audits last week's code"), and the deployed server *is* stale (9 tools vs 15). Following the skill literally means zero live verification; I improvised by using the stale server's 9 tools (whose request paths are identical to the checkout's for those 9) and labeling it, which "Say which you used" only weakly sanctions.
+8. **Step 5's command proves only half the gate:** `uv run pytest tests/test_policy_tools.py -q` covers the 2 policy writes; the 2 package writes (`fossa_block_package`, `fossa_unblock_package`) are refusal-tested in `tests/test_package_tools.py`, which the skill never mentions — despite its own prose promising "refusal tests that call **each** gated tool."
+9. **Step 4's `curl -s -o /tmp/resp.json`** conflicts with this environment's scratchpad policy; minor, but the skill picks the one temp path the harness tells agents not to use.
+10. **Step 4's empty-schema guidance says use "the spec's `examples` block"** but not where it lives — it's at the media-type level (`content.application/json.examples`), not in the schema; my first probe missed it. One clause ("under the response's content block, beside the schema") would have saved a round-trip.
+11. **Traps that worked (credit):** the stale-connected-server trap described this environment exactly (9 vs 15); `FOSSA_API_TOKEN` naming, locator URL-encoding, empty-schema-is-a-spec-gap, and the `addopts = "-m 'not live'"` no-network claim were all verified correct.
+
+## 3. OUTPUT QUALITY
+
+The mandated report shape (verdict counts first, domain-grouped gaps, spec drift as its own section, next-registrations last) filled with real data well — the domain grouping turned 259 raw gap rows into ~10 readable lines, and the two-verdict separation (server bug vs spec gap) was genuinely load-bearing for `/projects/{locator}`. Awkward spots: (a) the verdict line mixes units — "X of Y documented **operations**" and "X of Y registered read **tools**" — and posture/policy tools map many-to-one onto operations, so "tools verified" and "operations verified" diverge and the skill never says which to headline; (b) "with the failure list right there, each with its **status** and diagnosis" presumes HTTP status codes, which the MCP-tool verification path never surfaces (you get an `ok:true` envelope or an exception); (c) the "verified live" column needed a fourth value in practice — *verified transitively* (`/v2/issues/categories` proven only through posture's success) — which the three-outcome design doesn't accommodate; (d) "recommended next registrations, in order: tool modules already written but not imported (cheapest)" had zero entries on this branch, leaving the section to open with an empty category.
+
+## 4. SUGGESTED EDITS (severity-ranked)
+
+1. **Step 1 (high):** make the fallback and the parser agree — either `git show … &gt; spec/fossa-openapi.json` is forbidden, so parameterize the snippet (`SPEC=${SPEC:-spec/fossa-openapi.json}`) and have the fallback set it.
+2. **Step 4 (high):** add a "no local token at all" branch — no `.env`, remote-deployed server — saying explicitly: verify via the connected MCP tools for the endpoint set both surfaces share, list the remainder as unverified-with-reason, and note endpoint identity (path equality) is what transfers from a stale server, not code behavior.
+3. **Step 5 (high):** run the whole refusal surface, not one file — `uv run pytest tests/ -q -k "refus or gate"` or name both `test_policy_tools.py` and `test_package_tools.py`, and say new gated tool modules bring their own refusal test files.
+4. **Traps (medium):** delete or date-stamp every branch-specific count and behavior claim — "9 on the current working branch," "get_project issues up to four GETs," "list_projects falls back to POST" — or rephrase each as "has been true on some branches; verify in the module."
+5. **Step 2 (medium):** replace the two greps with ones that work — `sed -n '/from .tools import/,/)/p' src/fossa_mcp/server.py` for the import block, and `grep -n -A2 'request_json\|request_text'` (or "read each module") for the path mapping.
+6. **Intro (medium):** fix or footnote "6 of 157" with the counting rule used, so the number is checkable after a spec refresh.
+7. **Step 6 (low):** pick one verdict unit (operations) and add "verified transitively" as an allowed liveness value; drop the assumption that every verification yields an HTTP status.
+8. **Step 4 (low):** point the curl `-o` at a scratch/`$TMPDIR` path rather than `/tmp`, and name where the spec's `examples` block lives.
+9. **Step 1 (low):** offer a counts-only mode for the 271-line operation dump — printing all operations into an LLM transcript costs tokens the audit only needs once, grouped.
+
+## 5. WHAT WORKED
+
+The core architecture held up: deriving all three surfaces fresh (spec parse, `server.py` registrations, live calls) produced a correct audit on a branch the skill had never seen, and the numbers it *computes* — as opposed to the ones it *asserts* — were all right. The step-1 snippet ran verbatim and matched its documented output; the stale-connected-server trap predicted this environment precisely; the two-verdict discipline (spec gap vs server bug) prevented the one tempting misreport (`/projects/{locator}`'s 57 undocumented fields); the "credit every operation a tool touches" rule caught posture's and the policy tools' multi-endpoint fan-out; and the write gate was proven with zero risk exactly as designed — respx-intercepted refusal tests, tier variables force-removed, not one HTTP request sent.</result>
+<usage><subagent_tokens>141685</subagent_tokens><tool_uses>37</tool_uses><duration_ms>423106</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a89ef7cb9e053346b</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a89ef7cb9e053346b.output</output-file>
+<status>completed</status>
+<summary>Agent "Run and evaluate fossa-attribution" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Note: claude-sonnet-5[1m] (the safety classifier) was unavailable when reviewing this subagent's work. Please carefully verify the subagent's actions and output before acting on them.
+
+The run is complete — both documents generated, reconciliation clean. Here is the structured evaluation.
+
+---
+
+# Evaluation: skills/fossa-attribution/SKILL.md (executed end-to-end)
+
+Target: **niffler** — the org's largest project (165 dependencies). Pinned revision `git+github.com/darthzen/niffler$79852297f7430b4d4507ccb03eeb2ba77099e13d`, report pulled 2026-07-31. Outputs written to `/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/scratchpad/eval-attribution/` (`NOTICE`, 252 lines; `THIRD_PARTY_LICENSES.txt`, 14,528 lines; builder script `build_attribution.py`).
+
+## 1. VERDICT — completed, but not via the skill's primary path
+
+The skill's step-2→step-4 pipeline (build the documents from the attribution report) **failed on live data**: the rendered MD report contains no license names, no license texts, and no copyright holders — every row of its Licenses column is "-", even with `include_copyright_list=True` and every include flag on. The documents were produced entirely via the skill's *fallback* (per-package `fossa_list_dependencies(include_license_text=True, include_copyright=True)`), which the skill frames as truncation-recovery only.
+
+Real numbers:
+- **Dependencies:** 165 (10 direct, 155 transitive, depths 1–7)
+- **Entries in document:** 165; **unaccounted: 0** — reconciliation: "165 dependencies in FOSSA; 108 attributed with complete license texts, 57 carry text gaps; all 165 present in the document body; 0 unaccounted."
+- **Gaps flagged:** unknown/unlicensed **0**; license text fully unresolved **43** (incl. all 10 `@img/sharp-libvips-*` at FTL AND LGPL-3.0-or-later — the riskiest gap); partially unresolved texts **14**; multi-license without a recorded election **28**; missing copyright holders **52**.
+- **Truncation:** MD/TXT **never truncated** (~24k chars — nothing to truncate, since no texts render). SPDX_JSON **triggered the trap exactly as documented**: `truncated: true`, `original_char_count: 250675`, content cut at exactly 200,000 chars, `json_parse_error: true`, raw broken-JSON string returned. The prescribed recovery (per-package license texts, page by page) worked: 599KB and 299KB responses, not server-truncated.
+- **Rescue path:** `fossa_get_dependency(include_license_text=True)` tested on 2 of the 43 no-text packages (`next`, `@next/env`) — parameters correct, calls succeed, but `text: null` both times; no rescue observed.
+
+## 2. FRICTION LOG
+
+1. **Empty report is an unhandled failure mode (worst finding).** "`include_license_list` (True) — the full text of every license in use. This is where THIRD_PARTY_LICENSES content comes from; leave it on." and "Text formats are the right input for a NOTICE file." — On this org neither holds: the MD/TXT report renders with zero license data, and the only format with license info (SPDX_JSON) is the one that truncates into broken JSON. A fresh agent following step 4 literally would generate a plausible-looking document that is 100% gaps — the exact failure the preamble warns about — with no instruction to sanity-check the report body first.
+2. **Report's Usage field is wrong.** Every one of the 165 packages, including depth-7 transitives, renders as "**Usage**: Direct". The skill's scope step (direct vs transitive) cannot be executed from the report it tells you to use; only `fossa_list_dependencies` `depth` is truthful. No trap entry covers this.
+3. **Tool-result overflow is the dominant practical friction and is never mentioned.** Every `fossa_list_dependencies` call (even the "cheap reconciliation pass", 126KB/73KB) exceeded the harness output limit and was dumped to a file, requiring jq over saved files. Step 6's `count=100` example is fine for the API but unusable as an in-context read.
+4. **`count` clamps up, and `data.total` is ignored.** `count=1` returned 25 entries. More importantly, every response carries `data.total` (165) — the authoritative reconciliation anchor — yet step 6 prescribes only the fragile "Paginate (`page=2, 3, ...`) until a page comes back short" heuristic.
+5. **The election data exists but the skill doesn't say where.** Step 5: "Record *which license was elected* ... (the user's, or FOSSA's configured policy)." FOSSA's recorded conclusion is retrievable — `fossa_get_dependency` returns `rootProjects[].conclusions.scoped/base.licenses` (e.g. MIT concluded for `next`, resolving its 9-license sprawl) — but the skill never mentions `conclusions`, so all 28 multi-license entries went to the gaps section unnecessarily.
+6. **Scope step is unactionable as written for headless runs and for npm.** "Two decisions, and they are the user's, not yours — ask before generating" — no user existed; the stated default ("all runtime dependencies") rescued it, but "filter against `fossa_list_dependencies` data and the project's own manifests" assumes manifests are locally available (niffler's aren't) and that the data has a runtime/dev flag (npm data has none). I fell back to "everything analyzed" and said so in the header.
+7. **Step 4's NOTICE spec contradicts its own reference.** "one entry per package: name, version, license, copyright holder. Match the layout of the repo's own `NOTICE`" — the repo NOTICE contains *no* per-package entries; it is a family summary with one exception callout. I did both; another agent might do either.
+8. **Field-location gap.** The skill never says license text/copyright live at `licenseGroups[].licenses[].text` / `.copyright` — a fresh agent must reverse-engineer the shape from a 599KB saved file.
+9. **Accurate parts, for the record:** the response envelope description (`content`, `format`, `content_type`, `truncated`, `original_char_count`, `json_parse_error`) matched exactly; `include_copyright_list` default-False warning is correct; whole-locator-with-`$` guidance correct; `fossa_get_dependency` parameter names correct. The repo reference files existed on branch `block-package-tools`, so the missing-file scenario didn't arise — the skill has no fallback for it either.
+
+## 3. OUTPUT QUALITY
+
+`THIRD_PARTY_LICENSES.txt` matches the `generate_third_party_licenses.py` format faithfully and is structurally shippable — but I would not ship it as-is: 43 packages (including everything LGPL-3.0-or-later) carry only the fallback marker, and the `next` entry is a nine-license header over "(no bundled license file...)". The NOTICE is honest (provenance triple, explicit scope statement, gap counts) but the copyright column is noisy scraped data ("2012-2018 c) Mihai Bazon", leading-space holders, and `next`'s holders are visibly its bundled deps' authors, not Vercel). FOSSA-only data gets you ~65% of a shippable document here; the rest needs the packages' own LICENSE files.
+
+## 4. SUGGESTED EDITS (severity-ranked)
+
+1. **HIGH — Step 2/4:** add a verification gate — if the report body contains no license names/texts (all "-"), skip it and build from `fossa_list_dependencies(include_license_text=True, include_copyright=True)`; promote that from truncation-fallback to co-equal primary path.
+2. **HIGH — Traps:** add: `fossa_list_dependencies` responses overflow the client tool-result limit at even 25 entries; expect saved-file output and query it with jq, don't re-read it raw.
+3. **HIGH — Step 5:** name `rootProjects[].conclusions.scoped/base.licenses` from `fossa_get_dependency` as where FOSSA records a license election; consult it before filing a dual-license entry as an unelected gap.
+4. **MEDIUM — Step 6:** reconcile against `data.total` from the response, not only "paginate until short"; note small `count` values are clamped up to 25.
+5. **MEDIUM — Step 3:** state the headless fallback explicitly (no user reachable → include everything analyzed, record that in the header) and warn npm data carries no runtime/dev distinction.
+6. **MEDIUM — Traps:** the report's per-package "Usage" field can mislabel all transitives as Direct; trust `fossa_list_dependencies.depth`.
+7. **LOW — Step 4:** fix the NOTICE contradiction — specify "family summary in the NOTICE prose plus a per-package table", or drop "match the layout".
+8. **LOW — Step 5:** document that text/copyright live at `licenseGroups[].licenses[].text/.copyright`.
+9. **LOW — Step 4:** add a `git show origin/main:NOTICE` fallback for checkouts where the reference files are absent.
+
+## 5. WHAT WORKED
+
+The truncation trap is described with unusual precision and fired exactly as written — `truncated: true`, `original_char_count`, hard cut at 200,000 chars, `json_parse_error: true` on the JSON format — and its prescribed recovery (per-package texts, page by page) is what actually produced the deliverable. The locator discipline, the `include_copyright_list` default warning, and every parameter name checked out against the live schemas. Most importantly, the skill's own steps 5 and 6 — mandatory gaps section plus reconciliation arithmetic — are what surfaced the empty-report failure as 43 named gaps instead of a silently hollow document; the skill's safety net caught the skill's own primary path failing, which is the design working as intended.</result>
+<usage><subagent_tokens>138869</subagent_tokens><tool_uses>27</tool_uses><duration_ms>374297</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a45485be1a5785892</task-id>
+<tool-use-id>toolu_01V3WyRytyWRo727KVoCBepH</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a45485be1a5785892.output</output-file>
+<status>completed</status>
+<summary>Agent "Run and evaluate fossa-vuln-export" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Evaluation complete. All artifacts are in `/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/scratchpad/eval-vuln-export/` (export: `ollama-code-mcp.osv.json`; validator: `validate_osv.py`; synthetic vendor input: `grype-synthetic.json`; diff: `mode2_diff.py`, `mode2-sets.json`, `mode2-sets-noalias.json`; report: `vendor-diff-report.md`). The repo working tree was not touched. Skill evaluated: `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-vuln-export/SKILL.md` + `references/field-mapping.md`.
+
+---
+
+# 1. VERDICT
+
+**Both modes completed end-to-end.** Target: `git+github.com/darthzen/ollama-code-mcp` (6 vulnerability findings — the org max), revision `8a8da66a…`, `analysis_state: complete`.
+
+- **Mode 1:** 6 issues → 6 OSV entries (1:1, no CVE shared across packages; arithmetic stated per the skill). 6/6 purls built (`pkg:pypi/mcp@1.6.0` ×5 grouped to one purl, `pkg:pypi/pytest@8.0.0`) — **6/6 pass purl-grammar check**. But following the skill's text literally produced **22 mechanical validation failures across all 6 entries**: 6× missing required `modified` (skeleton omits it), 4× `CVSS_V3` type on a CVSS:4.0 vector (mapping hardcodes CVSS_V3), 6× range missing `type`, 6× range missing `introduced` event (mapping's bare `events[].fixed` rule). **Every failure attributes to the skill's mapping/skeleton, none to execution.** The skill's *own* validation checklist (id present, purl present, count reconciles) passes — it cannot detect its own schema violations. CycloneDX VDR was **not** produced: the skill says "on request" and none was made; executed as written.
+- **Mode 2** (synthetic Grype input — see caveats below):
+
+| Set | Count | Keys |
+|---|---|---|
+| FOSSA keys | 6 | |
+| Grype keys | 6 | |
+| Agreed | 4 | mcp/CVE-2025-53365 (via Grype `relatedVulnerabilities`), mcp/CVE-2025-53366 (via FOSSA `aliases`), mcp/CVE-2025-66416, pytest/CVE-2025-71176 |
+| FOSSA-only | 2 | mcp/CVE-2026-52869, mcp/CVE-2026-59950 — both spot-checked **confirmed** (1.6.0 inside &lt;1.27.2 and &lt;1.28.1) |
+| Vendor-only | 2 | urllib3/CVE-2025-50181, certifi/CVE-2024-39689 — attributed to scope (env vs manifest) |
+| Unresolved identity | 0 | |
+| Severity disagreements | 1 | pytest/CVE-2025-71176: 6.8/medium vs 8.1/high, both v3.1, delta 1.3 |
+| Methodology (excluded) | 1 | mcp/CVE-2025-66416: CVSS 4.0 vs 3.1 — correctly excluded by the version check |
+
+**Synthetic-input caveats:** the Grype file was constructed from mode-1 results (4/6 kept, 2 under GHSA ids, 2 additions), so mode 2 exercised format recognition, key extraction paths, purl stripping/normalization, two-directional alias resolution, all four sets, the severity-version check, and the unresolved bucket (counterfactual run: stripping FOSSA aliases degraded agreed 4→3, +1 fake FOSSA-only, +1 unresolved — the bucket caught it honestly). It did **not** exercise: real vendor formatting quirks (Grype's actual purl style, epoch/rebuild version noise), version disagreements, genuine scanner-DB differences, or the other five recognized formats.
+
+# 2. FRICTION LOG
+
+1. **Wrong field pointer for the join (would mis-join if trusted).** Section 3: *"in the v2 issue payload this is the issue's `revisionId`."* In the posture `top_vulnerability_issues` payload — the very payload section 2 tells you to prefer — the package is **`source.id`**; the only `revisionId` visible on a top-issue entry is `projects[].revisionId`, which is the **project** revision locator. `revisionId`-as-dependency-locator is true only in the nested `issues[]` of `direct_dependencies_with_issues` / `fossa_list_dependencies`. The "verify against the first live response" hedge saved the run, but the pointer actively points at the wrong field for the recommended path.
+2. **Alias sourcing is fiction against live data.** Mapping: *"GHSA / other advisory id, when present in the issue detail"* → there is **no structured GHSA field** anywhere in the live payload; GHSA ids appear only inside `references[]` URLs (`…/security/advisories/GHSA-…`). I improvised URL extraction; measured cost of not improvising: one agreed finding degrades to unresolved + fake FOSSA-only (`mode2-sets-noalias.json`). This is the skill's single most consequential gap because mode 2's alias resolution depends on it.
+3. **OSV skeleton is schema-invalid: no `modified`.** Section 5 skeleton and the validation checklist (*"every entry has an id, every affected package has a purl"*) both omit OSV's second required field. 6/6 entries fail.
+4. **Mapping hardcodes CVSS_V3; FOSSA emits CVSS 4.0 routinely.** Mapping row: *"`severity[]`: `{type: "CVSS_V3", score: "&lt;vector&gt;"}`"* — 4 of 6 live vectors are `CVSS:4.0` (posture returns `cvssVector` on every issue here, so the "if the issue detail carries one" hedge always fires). The CycloneDX column has the same defect (`method: "CVSSv31"`). Also contradicts SKILL.md's own emphasis (*"Do not fabricate CVSS vectors"*) by mislabeling real ones.
+5. **The ranges rule emits schema-invalid ranges.** Mapping: *"additionally `affected[].ranges[].events[].fixed` **only** when FOSSA names an exact fixed version"* — names neither the required `type` (SEMVER/ECOSYSTEM/GIT) nor the required `introduced` event; 12 of the 22 failures. Also ambiguous which fix: FOSSA names **two** exact versions (`partialFix` 1.9.4 vs `completeFix` 1.28.1); I chose partialFix (the fix for *this* CVE) and noted it.
+6. **Live fields with native OSV homes are stranded.** The payload carries `published` (real advisory date — the mapping only warns against misusing `createdAt`, then never maps the actual publish date), `references[]` (OSV `references`), and `affectedVersionRanges` — no mapping rows; per *"follow it rather than improvising"* they land in `database_specific.fossa` instead of their standard slots.
+7. **Skeleton/table internal inconsistencies:** skeleton puts `issue_id` in `affected[].database_specific`, table implies top-level `database_specific.fossa.issue_id`; skeleton shows `"remediation": "upgrade to 4.17.21"` (string) but the live field is an object (`{partialFix, partialFixDistance, completeFix, completeFixDistance}`) with no serialization rule; SKILL §6 names Grype's `dataSource` as an alias source but the mapping table lists only `relatedVulnerabilities`.
+8. **No procedure for selecting a project by criteria.** Section 1 covers only title resolution; "most vulnerability findings" required discovering `sort="issues-security_desc"` myself — and the listing calls the category **`security`** (`issues.security`, `issues-security_desc`) while everything downstream calls it **`vulnerability`**; the skill's naming trap covers `fossa_list_issues` but not this listing-level mismatch.
+9. **Traps verified accurate (no wrong traps found):** `top_issue_count=26` → pydantic `less_than_equal 25` rejection; project scope without `revision_locator` → `"revision_locator is required for project scope"`; bare revision id to `fossa_list_dependencies` → live 404 `"This project revision does not exist"`. The EPSS trap's example numbers (0.0598 → 92.6th pct) match live CVE-2025-53366 exactly. All parameter names in the skill match the loaded tool schemas.
+10. **Untested on this data (not failures):** git/apk/deb/`generic` purl rows (vulnerable set was pip-only), the &gt;25 paging path (6 issues), `in_progress` handling (analysis complete), and mapping's `cwes` → CycloneDX numeric conversion. Minor: *"The file is a JSON array of OSV entries"* is a nonstandard packaging (OSV is entry-per-file; `osv-scanner` won't ingest an array) — fine for diffing, mislabeled as standard.
+
+# 3. OUTPUT QUALITY
+
+**Usable for vendor comparison: yes.** The export carries everything mode 2 needs (id, aliases-after-improvisation, purl, severity data, provenance), and the diff joined cleanly. **Not usable as a standards-compliant interchange document as written:** any consumer that schema-validates rejects all 6 entries (`modified`), and the CVSS_V3-mislabeled 4.0 vectors would corrupt a downstream severity comparison. **The mode-2 report format is genuinely persuasive** — the section-7 ordering (counts with attached caveats, disagreements with CVSS versions, spot-checked one-sided rows, scope attribution, "what was compared") reads like something a skeptical customer would trust precisely because it refuses to claim wins; the "never present an unverified FOSSA-only row as a win" rule and the unresolved-identity bucket are its best features. One caveat the skill doesn't name: spot-checking FOSSA-only rows via FOSSA's own `affectedVersionRanges` is circular; the skill's "read the advisory" wording is right but the payload makes the lazy path the easy one.
+
+# 4. SUGGESTED EDITS (severity-ranked)
+
+1. **field-mapping.md "Severity" + SKILL §5 skeleton:** add required `modified` (use FOSSA scan/analyzedAt or export time, labeled) to skeleton AND to the §5 validation checklist — currently every export is schema-invalid.
+2. **field-mapping.md severity row:** derive type from the vector prefix (`CVSS:4.0`→`CVSS_V4`, `CVSS:3.x`→`CVSS_V3`); same fix for the CycloneDX `method` column — FOSSA emits v4 vectors today.
+3. **field-mapping.md ranges row:** specify the full shape `{type: "ECOSYSTEM", events: [{introduced: "0"}, {fixed: &lt;partialFix&gt;}]}` and state that partialFix (not completeFix) is the per-CVE fix.
+4. **field-mapping.md identity section:** replace "GHSA … when present in the issue detail" with the real rule — extract GHSA ids from `references[]` URLs (`/security/advisories/GHSA-…`); note there is no structured alias field.
+5. **SKILL §3:** correct the join pointer — package identity is `source.id` in posture top-issues; warn that `projects[].revisionId` there is the *project* revision, not the dependency.
+6. **field-mapping.md:** add rows for live `published` → OSV `published`, `references[]` → OSV `references[]` (type WEB/ADVISORY/FIX), and `affectedVersionRanges` → `database_specific`.
+7. **SKILL §1:** add the criteria-selection path (`sort="issues-security_desc"`) and note the listing calls the category `security` while issue filters call it `vulnerability`.
+8. **SKILL §5 / field-mapping:** reconcile `issue_id` placement and specify remediation-object serialization (it is not a string).
+9. **SKILL §5:** either say the JSON-array packaging is a local convention (osv-scanner won't read it) or emit entry-per-file.
+10. **SKILL §6:** mention CVSS v4-vs-v3 explicitly in the version check (v2-vs-v3.1 is the only example given; v4 is the case that actually occurs).
+
+# 5. WHAT WORKED
+
+The skill's operational spine is accurate and battle-tested: all three parameter traps reproduced exactly against the live server, every tool call in the procedure succeeded first try with the documented parameter names, the truncation-reconciliation arithmetic and the 6→6 entry accounting are exactly the right checks, and the pip purl rule produced 6/6 grammatically valid purls. Mode 2 is the strongest part — the version-stripped key, two-sided alias resolution, the unresolved-identity bucket (which demonstrably converted a would-be fake difference into an honest "can't tell"), the CVSS-version gate on severity disputes, and the section-7 report ordering all worked as designed and produced a report I would show a customer. The "verify field names against the first live response" hedge, though it papers over concrete errors, did prevent both potential mis-joins. The failures are concentrated where the skill trusts its own mapping tables instead of the live payload shapes; the procedure around those tables is sound.</result>
+<usage><subagent_tokens>96020</subagent_tokens><tool_uses>19</tool_uses><duration_ms>508022</duration_ms></usage>
+</task-notification>
+
+---
+
+Go
+
+---
+
+<task-notification>
+<task-id>a992f0448987f3f98</task-id>
+<tool-use-id>toolu_01UUVVnswypSGWehAVXDjU9s</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a992f0448987f3f98.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix fossa-license-review skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All fixes applied. Frontmatter intact, table renders with 8 uniform 3-column rows, diff is 61 insertions / 12 deletions against `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-license-review/SKILL.md`.
+
+## What changed, by ranked fix
+
+1. **Classification table (HIGH)** — added a **Share-alike content licenses** row (CC-BY-SA share-alike attaches to the content; CC-BY attribution-only; instruction to identify *what* is covered before treating the flag as a code problem). Mapped the long tail: FTL, BlueOak-1.0.0, Unicode-DFS-2016, W3C-20150513 into the permissive row (with a note on FTL's credit clause); WTFPL and `public-domain` into public-domain-equivalent. Renamed the last bucket **Unknown / custom / unmapped** and defined it as the home of last resort for "any license not mapped above".
+2. **Conclusions trap (HIGH)** — new Traps bullet: check `rootProjects[].conclusions` via `fossa_get_dependency` (`scoped.licenses` project-scoped, `base.licenses` org-wide); a conclusion turns the finding into "reconcile the conclusion with the still-open flag", not "remediate".
+3. **Discovery branch (HIGH)** — Step 2 now starts the "which project is the problem" ask with `fossa_list_projects(sort="issues-licensing_desc")`, confirm with the user before auditing.
+4. **Overflow warning (MEDIUM)** — Step 2 warns `count=100` overflows the tool-output limit (~126k chars observed; even `count=25` can); save pages to a file and query with jq/python.
+5. **No-user-no-repo fallback (MEDIUM)** — Step 1 gains a paragraph: infer the model from FOSSA metadata (title/description/commit messages), mark it inferred in the basis block, show the next-model-up counterfactual.
+6. **`depths` role claim deleted (MEDIUM)** — Step 4.2 now says FOSSA carries no dev/prod flag; `depths` is direct-vs-transitive; role comes from the manifest on disk or package knowledge stated as judgment.
+7. **Empty table + conflicts (MEDIUM)** — Step 5 lead defines the M=0 case (state what fires one model up); new **Conflicts as their own block** report section for `policy_conflict`, with the note that these issues can carry empty `details`, so obligation text comes from the license class.
+8. **Field name (LOW)** — `state: "analysis_in_progress"` corrected to `analysis_state: "in_progress"` and attributed to the posture response (the value was wrong too, not just the field name).
+9. **Dual-license bullet (LOW)** — noted FOSSA's `licenses` array doesn't distinguish OR-election from AND-aggregate (sharp's `FTL + LGPL-3.0-or-later` is both-apply); verify upstream before recommending an election.
+10. **Distribution-line sentence (LOW)** — Step 4.1: internal-only and SaaS-only produce identical action lists unless AGPL/network-copyleft is present; the swap that changes everything is crossing the distribution line.
+
+**Reconciliation** — Step 1 model 4 now closes with "no distributed artifact means no NOTICE file to ship, which is how step 4 states the same fact", and Step 4.1 was reworded to "the terms still attach to internal copies, but with nothing distributed there is no NOTICE file to ship" — the two passages now explicitly agree.
+
+## Claims verified in source
+
+- `issues-licensing_desc` — present in the `ProjectSort` literal, `src/fossa_mcp/models.py` lines 17–33, used by `src/fossa_mcp/tools/projects.py`.
+- `analysis_state` with values `"complete"` / `"in_progress"`, driven by HTTP 202 — `src/fossa_mcp/tools/posture.py` lines 97–123 (via `request_json_with_status` in `src/fossa_mcp/client.py`).
+- `rootProjects[].conclusions.scoped.licenses` / `.base.licenses` — verified in the vendored spec `spec/fossa-openapi.json` under `GET /v2/revisions/{locator}/dependencies/{dependencyRevisionLocator}` (the `fossa_get_dependency` endpoint per `src/fossa_mcp/tools/dependencies.py`); the example payload shows exactly the concluded-MIT shape. A top-level `dependency.conclusions` also exists, but I cited the `rootProjects[]` path as directed since it carries the per-project scoped conclusion.
+- `count` default 20 / max bounded by `fossa_max_page_size`, and the depth vocabularies — `src/fossa_mcp/tools/dependencies.py` and the `DependencyDepth` / `IssueDepth` literals in models.py (existing text already correct, left alone).
+
+## Not changed, with reason
+
+- The ~126k-char and count=25 overflow numbers are the evaluator's live observations, not derivable from source; I wrote them as observed figures, not schema facts.
+- Did not add `Fantasque`-style detail on BlueOak/Unicode-DFS/W3C obligations beyond the shared "ship license text and notices" row text — they are notice-preservation permissive licenses and the row already states that obligation; per-license footnotes would bloat the table against house style.
+- Left the top-level `dependency.conclusions` field unmentioned in the trap to keep it one path; the `rootProjects[]` path is the one the fix specified and both exist in the spec.</result>
+<usage><subagent_tokens>52345</subagent_tokens><tool_uses>24</tool_uses><duration_ms>196324</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>afee6d2113a620540</task-id>
+<tool-use-id>toolu_016tZ2ZXcgZQiy7yoAhoNxgW</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/afee6d2113a620540.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix fossa-spec-drift skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All fixes applied and verified. Other skill files show as modified in git, but those changes predate/parallel this task (other sessions working the same tree — which also explains the mid-task disk clobber I recovered from); I edited only `skills/fossa-spec-drift/SKILL.md`.
+
+## Changes applied (all 9 fixes)
+
+1. **`$SCRATCHPAD` defined (HIGH)** — Step 1 now has a prose note ("not predefined — in a fresh shell the `cp` below would target `/spec-baseline.json` and fail") plus `SCRATCHPAD="${SCRATCHPAD:-$(mktemp -d)}"` as the first line of the code block, with a warning that shell state doesn't persist between commands.
+2. **Stale per-branch inventory deleted (HIGH)** — removed the commit-`340518d`/"README stub on block-package-tools" prose from Step 1, the hardcoded branch list from the first Trap, and "only exists on the parity branches" from Step 5. All three now defer to `git ls-files spec/ API_PARITY_PLAN.md` as the sole authority, with a note that a hardcoded inventory went stale the same day it was written. Verified: both files are tracked on `block-package-tools`.
+3. **posture.py grep gap (HIGH)** — Step 4 now enumerates posture's three endpoints in prose: `GET /v2/issues/categories`, `GET /v2/issues`, `GET /v2/revisions/{locator}/dependencies`, citing posture.py lines 50-51, 63, 74 (all verified against source), and notes `/v2/issues/categories` is a real spec path (confirmed present) used by no other tool.
+4. **"9 tools → 8 paths" dropped (MEDIUM)** — replaced with "the greps define the current surface — every count in the report comes from their output, not from a remembered number." (server.py registers 15 tools; verified.)
+5. **block/unblock named (MEDIUM)** — Step 4 names `fossa_block_package`/`fossa_unblock_package` as sitting entirely on spec-absent endpoints captured from web-app traffic (verified: the packages.py docstring says exactly that, and none of `POST /packages/{locator}/rules`, `GET /policies/{policyId}`, `PUT /policies/{policyId}/rules` exist in the spec). The inferred-endpoint Trap now names both tools too.
+6. **Composite endpoint string (LOW)** — Step 4 notes policies.py line 119's `"GET /projects/{locator} + GET /organizations/..."` string must be split before mapping (line verified).
+7. **DeprecationWarning (LOW)** — Step 2 bullet: `datetime.utcnow()` at update_openapi.py line 57 (verified) prints a harmless stderr warning; exit code is what matters.
+8. **Full-tree status (LOW)** — Step 2 now records `git status --short` (whole tree) before the run; Step 6's command dropped the `spec/` scope and compares against that snapshot.
+9. **Byte-identity + phrasing (LOW)** — Step 3 opens with the cheap check (clean `git status` on the JSON, or README SHA-256 vs the committed one, means byte-identical — skip the diff); Step 5 adds: when versions are equal, say "no drift at X", not "between X and X".
+
+## Verification
+
+- Embedded Python script extracted verbatim from the edited file and run: prints `version 4.34.55 -&gt; 4.34.55`, `operations 271 -&gt; 271`, ADDED/REMOVED/CHANGED all 0.
+- Step 1 bash block extracted and run in a shell with `SCRATCHPAD` unset: succeeds, prints `4.34.55 271 operations`.
+- Frontmatter intact (name + description unchanged).
+
+## Chose not to change
+
+- Kept the "verified 2026-07-31"-free reference numbers (191 paths / 271 operations for 4.34.55) — those are version-pinned, not branch-pinned, and still correct.
+- Kept Step 6's "on a branch where the JSON was never tracked" caveat since it's branch-generic; softened only the "README is tracked on every branch" claim to defer to the Step 1 `ls-files` output, consistent with fix 2.
+
+One operational note: mid-task, the file on disk reverted my first four edits while keeping the fifth (iCloud sync conflict with a parallel session). I re-read the file, re-applied the lost edits, and confirmed via fresh grep of the disk copy that all changes are now present.</result>
+<usage><subagent_tokens>57941</subagent_tokens><tool_uses>26</tool_uses><duration_ms>240141</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a59a5afe402a6f34f</task-id>
+<tool-use-id>toolu_011bTNxXkR3Jqd32gY1y3h8o</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a59a5afe402a6f34f.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix fossa-attribution skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All nine fixes are applied to `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-attribution/SKILL.md` (only file touched; frontmatter intact, code fences balanced, 221 → 276 lines).
+
+**What changed, by fix:**
+
+1. (HIGH) Step 2 gained a "Gate on content before building anything" block: check the pulled report body actually carries license names/texts; an all-`-` Licenses column means the report is empty for the org. The per-package `fossa_list_dependencies(include_license_text=True, include_copyright=True)` path is now explicitly "the *other primary path*, not a degraded fallback", chosen on gate failure or truncation.
+2. (HIGH) New trap: with include flags on, responses overflow the client tool-result limit at even 25 entries (599KB observed); expect saved-to-file output, query with jq/Python, never re-read raw JSON.
+3. (HIGH) Step 5's multi-license bullet now directs to `fossa_get_dependency` → `rootProjects[].conclusions` — `scoped.licenses` (`lastEditedBy`/`updatedAt`) and `base.licenses` (`justification`) — before filing "no documented election".
+4. (MEDIUM) Step 6 now reconciles against `data.total` ("authoritative count... across all pages") instead of stopping on a short page, and notes small `count` values are clamped up to 25 (count=1 returned 25).
+5. (MEDIUM) Step 3 gained the headless fallback (include everything analyzed, record the defaulted scope in the header) and the npm warning (no runtime/dev flag; runtime filtering needs the manifest, which may not be locally available).
+6. (MEDIUM) New trap: the report's "Usage" field can label all packages Direct (165/165 observed, incl. depth-7 transitives); trust `depth` from `fossa_list_dependencies`.
+7. (LOW) Step 4's NOTICE description rewritten as "family-summary prose plus a per-package table", resolving the contradiction — the repo's NOTICE is now cited as the model for the prose only.
+8. (LOW) Payload location for texts documented in the step 2 per-package block: `licenseGroups[].licenses[].text` / `.copyright`, flagged as observed-live (see verification below).
+9. (LOW) Step 4 gained the `git show origin/main:NOTICE` / `git show origin/main:scripts/generate_third_party_licenses.py` fallback.
+
+**Payload paths verified in source/spec:**
+- `rootProjects[].conclusions.scoped.licenses` and `.base.licenses` — confirmed in `spec/fossa-openapi.json` under both `/v2/revisions/{locator}/dependencies` and the single-dependency endpoint, exactly the shape described (scoped: licenses/lastEditedBy/updatedAt; base: licenses/justification). Conclusions also exist at the dependency top level; I kept the fix's `rootProjects[]` path since that scopes to the project.
+- `data.total` — spec declares `total` ("total number of dependencies matching the filters, across all pages") on the list response; `src/fossa_mcp/tools/dependencies.py` wraps the raw response under `data`, so `data.total` is correct.
+- Tool parameters (`include_license_text`, `include_copyright`, `include_copyright_list` default False, count cap, truncation fields) — all match `dependencies.py` and `reports.py`.
+- `licenseGroups[].licenses[].text` / `.copyright` — the spec confirms the `licenseGroups[].licenses[]` container on the v2 payload but does **not** declare the two flag-gated fields (they only appear in the deprecated v1 `/revisions/{locator}/dependencies` schema as `licenses[].text`/`.copyright`). I documented the v2 path as observed-live with that caveat stated inline, since full spec verification wasn't possible.
+
+**Chose not to change:** the step 6 example call keeps `count=100` — the clamp only affects values below 25 and 100 is the true cap per `config.py`'s `fossa_max_page_size`, so the example stays correct. Count clamping is described as observed server behavior, not a documented contract, because the tool source only validates the 1–100 range and passes `count` through.</result>
+<usage><subagent_tokens>55151</subagent_tokens><tool_uses>21</tool_uses><duration_ms>196586</duration_ms></usage>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a667e6ea00bab43d1</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/ecda57d0-0b1c-400d-9226-3ac6e1de0076/tasks/a667e6ea00bab43d1.output</output-file>
+<status>completed</status>
+<summary>Agent "Fix fossa-vuln-export skill" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>All edits are in, both files' structure is intact (heading sequence unchanged, all tables column-consistent), and the skeleton passes every check on the new validation list. Note: `git diff` shows other skills' SKILL.md files also modified in the working tree — those are from concurrent sessions; I touched only the two assigned files.
+
+## Summary of changes
+
+**`/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-vuln-export/references/field-mapping.md`**
+
+1. **`modified` row added** (identity table): flagged as required by the OSV schema, sourced from export timestamp or the revision's `analyzedAt`, labeled via `database_specific.fossa.modified_is`.
+2. **CVSS type derivation**: the vector row now names the real FOSSA field `cvssVector` and derives OSV `severity[].type` from the prefix (`CVSS:4.0`→`CVSS_V4`, `CVSS:3.x`→`CVSS_V3`, `CVSS:2`→`CVSS_V2`), with an explicit "never hardcode CVSS_V3" warning; the CycloneDX column derives `method` (`CVSSv4`/`CVSSv31`/`CVSSv3`) the same way, and the numeric-score row's hardcoded `method: "CVSSv31"` is gone.
+3. **Ranges shape**: remediation row now gives the full schema-valid shape `{"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "&lt;partialFix&gt;"}]}`, states a bare `fixed` event is invalid, and specifies `partialFix` as the per-CVE fix (`completeFix` clears all CVEs in the package).
+4. **GHSA extraction rule**: replaced the fictional "when present in the issue detail" with the real rule — no structured alias field exists; parse `GHSA-…` out of `references[]` URLs (`…/security/advisories/GHSA-…`) — plus a paragraph on how skipping it silently turns shared findings into fake two-sided differences.
+5. **New rows for stranded fields**: `published` → OSV `published` (with the existing createdAt-is-not-published note updated to point at it); `references[]` → OSV `references[]` typed ADVISORY/FIX/WEB by URL; `affectedVersionRanges[]` → `database_specific` with the explicit statement that it has no clean OSV home.
+6. **Reconciliations**: `issue_id` settled on `affected[].database_specific.fossa.issue_id` (matches the skeleton; justified — one entry can merge several FOSSA issues); `remediation` documented as an object with a serialization rule (verbatim object + rendered recommendation string); Grype alias column now includes `vulnerability.dataSource` URL alongside `relatedVulnerabilities[].id`, matching SKILL step 6.
+7. Locator row's `revisionId` claim corrected to `source.id`, pointing at SKILL step 3 for the per-payload rule.
+
+**`/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/skills/fossa-vuln-export/SKILL.md`**
+
+1. **§1**: added the criteria-selection path (`fossa_list_projects(sort="issues-security_desc")`) and the `security`-vs-`vulnerability` naming mismatch.
+2. **§3**: join pointer corrected per payload — `source.id` in posture top-issues / list_issues; `projects[].revisionId` called out as the project's revision ("joining on it silently mismatches every finding"); `revisionId` reserved for nested issues in dependency records.
+3. **§5 skeleton**: added `"modified"` and `modified_is` label; `remediation` is now the four-key object.
+4. **§5 bullets**: new bullet stating OSV requires `modified` and how to source/label it; severity bullet extended with the vector-prefix type derivation and the CVSS:4.0 reality.
+5. **§5**: new paragraph stating the JSON array is a local diffing convention, not OSV interchange (osv-scanner won't ingest it), offering entry-per-file; validation checklist extended (id **and** modified, severity type matches vector prefix, every range has an `introduced` event).
+6. **§6**: CVSS-version gate now names v4-vs-v3.x as the case that actually occurs.
+7. **Traps**: the "do not fabricate vectors" bullet updated to say use `cvssVector` when present rather than implying FOSSA only supplies a number.
+
+**Verification against source**: `src/fossa_mcp/tools/posture.py` confirms `top_vulnerability_issues` is the raw `GET /v2/issues` payload; `spec/fossa-openapi.json` confirms `source.id` = dependency locator (`npm+lodash$4.2.0` in the spec's own example), `projects[].revisionId` on project entries, `cvssVector`, `published`, `references[]` (URL strings), `affectedVersionRanges[]` (free-text strings), the four-key `remediation` object, and the `issues-security_desc` sort key with `issues.security` counts on `/v2/projects`.
+
+**One deliberate deviation**: the circularity sentence (fix 10) was requested "in §6", but spot-checking of FOSSA-only rows lives in §7 item 3 — I placed it there, inline where the reader is told to "read the advisory", since a sentence about spot-check discipline in §6 would reference a procedure that section doesn't contain. Everything else applied as specified.</result>
+<usage><subagent_tokens>75426</subagent_tokens><tool_uses>35</tool_uses><duration_ms>339612</duration_ms></usage>
+</task-notification>
