@@ -7,10 +7,11 @@ must fire before any request leaves the process — an unknown section, a missin
 `FOSSA_ORG_ID`, and each of the three write tiers with that tier off.
 
 The tier assertions are the point of this file. `fossa_update_org_settings`
-spans three tiers because its sections do, so every tier is exercised through
-the same tool: an ordinary section under WRITE, an authentication section that
-must not be reachable without ADMIN, and a propagate that must not be reachable
-without DESTRUCTIVE.
+advertises `destructiveHint=True` and both of its actions earn it, so neither
+is reachable without DESTRUCTIVE: `replace` because the PUT overwrites a whole
+section rather than merging into it, `propagate` because the PATCH rewrites the
+setting on every project in the organization. An authentication section needs
+ADMIN on top of that, and needing two tiers means both must be enabled.
 """
 
 import json
@@ -35,6 +36,7 @@ from fossa_mcp.models.org_settings import (
     OrgSettingsWritableSection,
 )
 from fossa_mcp.tools import org_settings
+from fossa_mcp.writes import WriteTier
 
 BASE = "https://app.fossa.com/api"
 ORG_ID = 4242
@@ -402,7 +404,11 @@ async def test_limits_without_an_org_id_refuses_before_requesting(
 async def test_write_without_an_org_id_refuses_before_requesting(
     settings, respx_mock, make_context
 ):
-    no_org = settings.model_copy(update={"fossa_allow_writes": True})
+    # Destructive too: `replace` needs that tier, and this test is about the
+    # missing organization id rather than about the gate.
+    no_org = settings.model_copy(
+        update={"fossa_allow_writes": True, "fossa_allow_destructive": True}
+    )
 
     client = FossaClient(no_org)
     with pytest.raises(FossaConfigurationError, match="FOSSA_ORG_ID"):
@@ -420,7 +426,7 @@ async def test_write_without_an_org_id_refuses_before_requesting(
 
 
 @pytest.mark.asyncio
-async def test_replace_an_object_section(writable_settings, respx_mock, make_context):
+async def test_replace_an_object_section(destructive_settings, respx_mock, make_context):
     route = respx_mock.put(f"{ORG}/settings/projects/issues/security").mock(
         return_value=httpx.Response(200, json={"defaultSecurityPolicyId": 12})
     )
@@ -433,9 +439,9 @@ async def test_replace_an_object_section(writable_settings, respx_mock, make_con
         "projectDefaultStatusCheckFilterVulnerability": 3,
     }
 
-    client = FossaClient(writable_settings)
+    client = FossaClient(destructive_settings)
     result = await org_settings.update_org_settings(
-        make_context(client, writable_settings), "projects-issues-security", values=body
+        make_context(client, destructive_settings), "projects-issues-security", values=body
     )
     await client.aclose()
 
@@ -449,14 +455,14 @@ async def test_replace_an_object_section(writable_settings, respx_mock, make_con
 
 
 @pytest.mark.asyncio
-async def test_replace_a_string_array_section(writable_settings, respx_mock, make_context):
+async def test_replace_a_string_array_section(destructive_settings, respx_mock, make_context):
     route = respx_mock.put(f"{ORG}/settings/languages/pod").mock(return_value=httpx.Response(204))
 
     sources = ["https://cdn.cocoapods.org", "https://pods.acme.internal"]
 
-    client = FossaClient(writable_settings)
+    client = FossaClient(destructive_settings)
     result = await org_settings.update_org_settings(
-        make_context(client, writable_settings), "languages-pod", items=sources
+        make_context(client, destructive_settings), "languages-pod", items=sources
     )
     await client.aclose()
 
@@ -468,16 +474,16 @@ async def test_replace_a_string_array_section(writable_settings, respx_mock, mak
 
 
 @pytest.mark.asyncio
-async def test_replace_an_object_array_section(writable_settings, respx_mock, make_context):
+async def test_replace_an_object_array_section(destructive_settings, respx_mock, make_context):
     route = respx_mock.put(f"{ORG}/settings/integrations/custom-license-scans").mock(
         return_value=httpx.Response(204)
     )
 
     scans = [{"name": "Acme internal", "matchCriteria": "ACME-INTERNAL-1\\.0"}]
 
-    client = FossaClient(writable_settings)
+    client = FossaClient(destructive_settings)
     result = await org_settings.update_org_settings(
-        make_context(client, writable_settings),
+        make_context(client, destructive_settings),
         "integrations-custom-license-scans",
         items=scans,
     )
@@ -492,15 +498,15 @@ async def test_replace_an_object_array_section(writable_settings, respx_mock, ma
 
 @pytest.mark.asyncio
 async def test_replace_sbom_report_defaults_uses_its_non_settings_path(
-    writable_settings, respx_mock, make_context
+    destructive_settings, respx_mock, make_context
 ):
     route = respx_mock.put(f"{ORG}/sbomReportDefaults").mock(
         return_value=httpx.Response(200, json={"sbomReportSupplier": "Acme"})
     )
 
-    client = FossaClient(writable_settings)
+    client = FossaClient(destructive_settings)
     result = await org_settings.update_org_settings(
-        make_context(client, writable_settings),
+        make_context(client, destructive_settings),
         "sbom-report-defaults",
         values={"sbomReportSupplier": "Acme"},
     )
@@ -537,19 +543,24 @@ async def test_propagate_sends_the_field_list_as_a_bare_array(
 
 
 @pytest.mark.asyncio
-async def test_replace_an_admin_section_succeeds_once_admin_is_enabled(
-    admin_settings, respx_mock, make_context
+async def test_replace_an_admin_section_succeeds_once_both_tiers_are_enabled(
+    full_settings, respx_mock, make_context
 ):
-    """The ADMIN happy path. `saml` used to stand in for this; it moved out."""
+    """The ADMIN happy path, which is also the two-tier happy path.
+
+    An authentication `replace` needs ADMIN for the section and DESTRUCTIVE for
+    the wholesale PUT, so it proceeds only with both enabled. `saml` used to
+    stand in for this; it moved out.
+    """
     route = respx_mock.put(f"{ORG}/settings/authentication").mock(
         return_value=httpx.Response(200, json={"subdomain": "acme", "disableInvite": True})
     )
 
     body = {"subdomain": "acme", "disableInvite": True}
 
-    client = FossaClient(admin_settings)
+    client = FossaClient(full_settings)
     result = await org_settings.update_org_settings(
-        make_context(client, admin_settings), "authentication", values=body
+        make_context(client, full_settings), "authentication", values=body
     )
     await client.aclose()
 
@@ -559,16 +570,17 @@ async def test_replace_an_admin_section_succeeds_once_admin_is_enabled(
 
 
 @pytest.mark.asyncio
-async def test_general_without_access_control_keys_needs_only_write(
-    writable_settings, respx_mock, make_context
+async def test_general_without_access_control_keys_does_not_need_admin(
+    destructive_settings, respx_mock, make_context
 ):
+    """Renaming the organization is destructive (it is a PUT) but not ADMIN."""
     route = respx_mock.put(f"{ORG}/settings/general").mock(
         return_value=httpx.Response(200, json={"title": "Acme"})
     )
 
-    client = FossaClient(writable_settings)
+    client = FossaClient(destructive_settings)
     await org_settings.update_org_settings(
-        make_context(client, writable_settings), "general", values={"title": "Acme"}
+        make_context(client, destructive_settings), "general", values={"title": "Acme"}
     )
     await client.aclose()
 
@@ -652,6 +664,63 @@ async def test_general_escalates_to_admin_for_access_control_keys(
     with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_ADMIN"):
         await org_settings.update_org_settings(
             make_context(client, writable_settings), "general", values={"defaultRoleId": 3}
+        )
+    await client.aclose()
+
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_replace_is_not_reachable_through_the_write_tier(
+    writable_settings, respx_mock, make_context
+):
+    """The PUT replaces the section wholesale, so it is DESTRUCTIVE.
+
+    This is the gate half of the tool's `destructiveHint=True` annotation. The
+    hint claims two grounds — the wholesale PUT and the propagate — and both
+    must reach a DESTRUCTIVE check, or an operator reading the annotation as
+    "this needs the destructive tier" would be wrong about the replace path.
+    """
+    client = FossaClient(writable_settings)
+    with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_DESTRUCTIVE"):
+        await org_settings.update_org_settings(
+            make_context(client, writable_settings),
+            "projects-privacy",
+            values={"defaultProjectPrivacy": "private"},
+        )
+    await client.aclose()
+
+    assert respx_mock.calls.call_count == 0
+
+
+def test_no_section_or_action_computes_a_plain_write_tier():
+    """No combination of arguments offers a plain-WRITE way through the tool.
+
+    Asserted on the tier computation directly rather than through the tool,
+    because the input model validates the body before the gate runs: a section
+    with required keys would raise ValidationError first and prove nothing
+    about the tier.
+    """
+    for section in ORG_SETTINGS_WRITE_SECTIONS:
+        tiers = org_settings._required_tiers(
+            cast(OrgSettingsWritableSection, section),
+            {"title": "Acme"},
+        )
+        assert WriteTier.DESTRUCTIVE in tiers
+        assert WriteTier.WRITE not in tiers
+
+
+@pytest.mark.asyncio
+async def test_replace_of_an_admin_section_needs_destructive_as_well(
+    admin_settings, respx_mock, make_context
+):
+    """Two tiers means two checks: ADMIN alone does not unlock the PUT."""
+    client = FossaClient(admin_settings)
+    with pytest.raises(FossaWriteNotPermittedError, match="FOSSA_ALLOW_DESTRUCTIVE"):
+        await org_settings.update_org_settings(
+            make_context(client, admin_settings),
+            "authentication",
+            values={"disableInvite": True},
         )
     await client.aclose()
 

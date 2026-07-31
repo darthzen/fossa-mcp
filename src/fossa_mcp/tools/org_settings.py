@@ -30,7 +30,9 @@ What FOSSA's API actually supports, which is what shapes these tools:
 * `PUT` replaces a section wholesale — it does not merge. Sending one key of a
   five-key section is how a section gets half-erased, so the sections whose spec
   marks keys required reject a partial body in the input model rather than
-  passing it through.
+  passing it through. That is also why `action="replace"` is gated at
+  `DESTRUCTIVE`: `writes.py` puts state that is *wholesale replaced* in that
+  tier, not only state that is deleted.
 * `PATCH` on a `projects-*` section is FOSSA's "apply to existing projects"
   switch: it pushes the named organization defaults down onto every project in
   the organization, overwriting whatever each project had. That is an unbounded
@@ -103,7 +105,6 @@ def _org_id(settings: Settings) -> int:
 
 def _required_tiers(
     section: OrgSettingsWritableSection,
-    action: OrgSettingsAction,
     values: dict[str, Any] | None,
 ) -> list[WriteTier]:
     """Decide which write tiers this particular call must satisfy.
@@ -112,7 +113,22 @@ def _required_tiers(
     call from the section and action rather than fixed at registration. Each
     returned tier is checked, and `require_tier` demands `FOSSA_ALLOW_WRITES`
     for all of them, so an ADMIN section is never reachable through a plain
-    WRITE gate and a propagate is never reachable without the DESTRUCTIVE flag.
+    WRITE gate.
+
+    Both actions are DESTRUCTIVE, for the two separate reasons the tool's
+    `destructiveHint=True` annotation advertises:
+
+    * `replace` is the section's `PUT`, and FOSSA's `PUT` overwrites the whole
+      section rather than merging into it — a caller who omits a key wipes it,
+      with no undo. `writes.py` scopes the destructive tier to state that is
+      *wholesale replaced*, not only to deletes, so this is squarely that tier.
+      Gating it at plain WRITE contradicted the annotation the tool publishes.
+    * `propagate` is the section's `PATCH`, which pushes the organization
+      default onto every existing project in one call, so its target set is
+      unbounded regardless of the HTTP verb.
+
+    There is consequently no plain-WRITE path through this tool, which is what
+    a statically `destructiveHint=True` tool should look like.
     """
     tiers: list[WriteTier] = []
 
@@ -124,10 +140,11 @@ def _required_tiers(
         if ORG_SETTINGS_GENERAL_ACCESS_CONTROL_KEYS & set(values):
             tiers.append(WriteTier.ADMIN)
 
-    if action == "propagate":
-        tiers.append(WriteTier.DESTRUCTIVE)
+    # `action` is a closed Literal of exactly these two, so this list is never
+    # empty and the tool has no WRITE-tier fallback.
+    tiers.append(WriteTier.DESTRUCTIVE)
 
-    return tiers or [WriteTier.WRITE]
+    return tiers
 
 
 # --- reads -------------------------------------------------------------------
@@ -224,13 +241,16 @@ async def update_org_settings(
     Write one section of a FOSSA organization's settings, or push a section's
     organization defaults down onto every existing project.
 
-    WRITES TO FOSSA. Requires FOSSA_ORG_ID and FOSSA_ALLOW_WRITES=true. Some
-    sections and actions require more; the tier is decided per call:
+    WRITES TO FOSSA. Requires FOSSA_ORG_ID, FOSSA_ALLOW_WRITES=true and
+    FOSSA_ALLOW_DESTRUCTIVE=true. Both actions destroy state, for different
+    reasons, and some sections require more still; the tier is decided per call:
 
-    * action="propagate" also requires FOSSA_ALLOW_DESTRUCTIVE=true. It
-      overwrites the named setting on every project in the organization, and
-      FOSSA offers no undo, so its target set is unbounded regardless of the
-      HTTP verb.
+    * action="replace" requires FOSSA_ALLOW_DESTRUCTIVE=true. The PUT replaces
+      the whole section rather than merging into it, so a body that omits a key
+      erases it, and FOSSA offers no undo.
+    * action="propagate" requires FOSSA_ALLOW_DESTRUCTIVE=true. It overwrites
+      the named setting on every project in the organization, so its target set
+      is unbounded regardless of the HTTP verb.
     * section="authentication" also requires FOSSA_ALLOW_ADMIN=true, as does
       section="general" when `values` carries `defaultRoleId` or
       `disableNonCustomTeamUserRoles`.
@@ -265,7 +285,7 @@ async def update_org_settings(
     client: FossaClient = lifespan_ctx["client"]
     settings: Settings = lifespan_ctx["settings"]
 
-    for tier in _required_tiers(validated.section, validated.action, validated.values):
+    for tier in _required_tiers(validated.section, validated.values):
         require_tier(settings, tier, f"fossa_update_org_settings(section={validated.section!r})")
 
     org_id = _org_id(settings)
