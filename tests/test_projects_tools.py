@@ -116,7 +116,7 @@ async def test_get_projects_summary_endpoint(settings, respx_mock, make_context)
 
 @pytest.mark.asyncio
 async def test_get_project_associations_fetches_all_three_sections(
-    settings, respx_mock, make_context
+    settings, respx_mock, make_context, assert_raw_path
 ):
     labels = respx_mock.get(f"{BASE}/projects/{ENCODED_PROJECT}/labels").mock(
         return_value=httpx.Response(200, json=[{"id": 4, "label": "tier-1"}])
@@ -132,10 +132,14 @@ async def test_get_project_associations_fetches_all_three_sections(
     result = await projects.get_project_associations(make_context(client, settings), PROJECT)
     await client.aclose()
 
-    # Matching these routes is the assertion that the locator was encoded once;
-    # httpx re-decodes `url.path`.
     assert labels.called and groups.called and published.called
     assert respx_mock.calls.call_count == 3
+    # Encoding is asserted against the bytes on the wire. Route matching would
+    # accept an unescaped `git+github.com/acme/widget` here, which is three
+    # extra path segments and a different endpoint.
+    assert_raw_path(labels.calls.last.request, f"/projects/{ENCODED_PROJECT}/labels")
+    assert_raw_path(groups.calls.last.request, f"/v2/projects/{ENCODED_PROJECT}/release-groups")
+    assert_raw_path(published.calls.last.request, f"/projects/{ENCODED_PROJECT}/last-published")
     assert result["data"]["labels"][0]["label"] == "tier-1"
     assert result["data"]["release_groups"]["releaseGroups"][0]["releaseGroupId"] == 9
     assert result["data"]["last_published"] == "2026-07-30T12:00:00Z"
@@ -284,7 +288,7 @@ async def test_deletes_refuse_when_only_the_write_tier_is_enabled(
 
 @pytest.mark.asyncio
 async def test_update_project_sends_only_the_named_fields(
-    writable_settings, respx_mock, make_context
+    writable_settings, respx_mock, make_context, assert_raw_path
 ):
     route = respx_mock.put(f"{BASE}/projects/{ENCODED_PROJECT}").mock(
         return_value=httpx.Response(200, json={"locator": PROJECT, "title": "widget-core"})
@@ -306,6 +310,7 @@ async def test_update_project_sends_only_the_named_fields(
 
     request = route.calls.last.request
     assert request.method == "PUT"
+    assert_raw_path(request, f"/projects/{ENCODED_PROJECT}")
     assert json.loads(request.content) == {
         "title": "widget-core",
         "public": False,
@@ -467,7 +472,9 @@ async def test_delete_attribution_slug_accepts_an_empty_204(
 
 
 @pytest.mark.asyncio
-async def test_delete_project_endpoint(destructive_settings, respx_mock, make_context):
+async def test_delete_project_endpoint(
+    destructive_settings, respx_mock, make_context, assert_raw_path
+):
     route = respx_mock.delete(f"{BASE}/projects/{ENCODED_PROJECT}").mock(
         return_value=httpx.Response(200)
     )
@@ -478,6 +485,9 @@ async def test_delete_project_endpoint(destructive_settings, respx_mock, make_co
 
     request = route.calls.last.request
     assert request.method == "DELETE"
+    # The one path in this module where a mis-encoded locator would delete
+    # something other than what was named.
+    assert_raw_path(request, f"/projects/{ENCODED_PROJECT}")
     assert request.url.query == b""
     assert result["endpoint"] == "DELETE /projects/{locator}"
     assert result["data"]["deleted"] == [PROJECT]

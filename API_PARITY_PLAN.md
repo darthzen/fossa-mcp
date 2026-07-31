@@ -86,9 +86,18 @@ print(json.dumps(op['requestBody'], indent=2))"
   properties in the spec, so field names must come from live responses — `securityPolicyId`,
   `securityIssueScanningEnabled` and friends were confirmed against a real call, not the spec.
   Expect the same gap elsewhere; verify reads against a live org before trusting a shape.
-* **Locators need `quote(locator, safe="")`.** They contain `+`, `/`, and `$`. Note that
-  `httpx.Request.url.path` re-decodes, so assert encoding by letting the respx route match rather
-  than comparing `url.path`.
+* **Locators need `quote(locator, safe="")`.** They contain `+`, `/`, and `$`. Asserting that in a
+  test is harder than it looks, and an earlier version of this document got it wrong:
+
+  **Letting the respx route match does not verify encoding, and neither does comparing
+  `url.path`.** Both normalize the URL before comparing, so a route registered as
+  `/api/projects/pip%2Baiofile` also matches a request that put `pip+aiofile` on the wire
+  unescaped — verified directly against respx 0.23.1. A test that registers an encoded route and
+  then asserts `route.called` passes whether or not the code encodes anything.
+
+  Assert against `request.url.raw_path`, which is the bytes actually sent. The shared
+  `assert_raw_path` fixture in `tests/conftest.py` is the one place that comparison lives; use it
+  rather than writing a local variant.
 
 ---
 

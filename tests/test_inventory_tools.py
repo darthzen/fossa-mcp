@@ -6,8 +6,10 @@ write asserts the exact JSON body.
 **Percent-encoding is asserted against `request.url.raw_path`, not by letting
 the respx route match.** Both `httpx.Request.url.path` and respx's own route
 matching normalize the URL before comparing, so a route written with an encoded
-locator matches a request that never escaped one — verified against respx 0.22.
-`raw_path` is the only view that keeps the bytes actually put on the wire.
+locator matches a request that never escaped one — verified against respx
+0.23.1. `raw_path` is the only view that keeps the bytes actually put on the
+wire. The comparison lives in the shared `assert_raw_path` fixture in
+`tests/conftest.py`.
 """
 
 import json
@@ -50,21 +52,13 @@ def _query_pairs(request: httpx.Request) -> list[tuple[str, str]]:
     return httpx.QueryParams(request.url.query.decode()).multi_items()
 
 
-def _assert_raw_path(request: httpx.Request, expected: str) -> None:
-    """Assert the path as it was sent, percent-encoding intact.
-
-    `raw_path` carries the query string too, so split it off; the query is
-    asserted separately by `_query_pairs`.
-    """
-    raw_path = request.url.raw_path.decode().split("?", 1)[0]
-    assert raw_path == f"/api{expected}"
-
-
 # --- binary decomposition ----------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_binary_components_revision_count(settings, respx_mock, make_context):
+async def test_binary_components_revision_count(
+    settings, respx_mock, make_context, assert_raw_path
+):
     route = respx_mock.get(f"{API}/binary/revision/{ENCODED_REVISION}/components/count").mock(
         return_value=httpx.Response(200, json={"count": 42})
     )
@@ -76,7 +70,7 @@ async def test_binary_components_revision_count(settings, respx_mock, make_conte
     await client.aclose()
 
     assert route.calls.last.request.method == "GET"
-    _assert_raw_path(
+    assert_raw_path(
         route.calls.last.request,
         f"/binary/revision/{ENCODED_REVISION}/components/count",
     )
@@ -155,7 +149,9 @@ async def test_binary_components_rejects_mismatched_scope_arguments(
 
 
 @pytest.mark.asyncio
-async def test_binary_dependency_confidence_revision_all(settings, respx_mock, make_context):
+async def test_binary_dependency_confidence_revision_all(
+    settings, respx_mock, make_context, assert_raw_path
+):
     route = respx_mock.get(f"{API}/binary/{ENCODED_REVISION}/dependency-confidence").mock(
         return_value=httpx.Response(200, json={"confidences": {DEPENDENCY: "High"}})
     )
@@ -167,14 +163,14 @@ async def test_binary_dependency_confidence_revision_all(settings, respx_mock, m
     await client.aclose()
 
     assert route.calls.last.request.method == "GET"
-    _assert_raw_path(route.calls.last.request, f"/binary/{ENCODED_REVISION}/dependency-confidence")
+    assert_raw_path(route.calls.last.request, f"/binary/{ENCODED_REVISION}/dependency-confidence")
     assert result["endpoint"] == "GET /binary/{revisionLocator}/dependency-confidence"
     assert result["data"]["confidences"][DEPENDENCY] == "High"
 
 
 @pytest.mark.asyncio
 async def test_binary_dependency_confidence_single_release_dependency(
-    settings, respx_mock, make_context
+    settings, respx_mock, make_context, assert_raw_path
 ):
     route = respx_mock.get(
         f"{API}/binary/release/9/dependency-confidence/{ENCODED_DEPENDENCY}"
@@ -189,7 +185,7 @@ async def test_binary_dependency_confidence_single_release_dependency(
     )
     await client.aclose()
 
-    _assert_raw_path(
+    assert_raw_path(
         route.calls.last.request,
         f"/binary/release/9/dependency-confidence/{ENCODED_DEPENDENCY}",
     )
@@ -199,7 +195,9 @@ async def test_binary_dependency_confidence_single_release_dependency(
 
 
 @pytest.mark.asyncio
-async def test_binary_revision_detail_component_matches(settings, respx_mock, make_context):
+async def test_binary_revision_detail_component_matches(
+    settings, respx_mock, make_context, assert_raw_path
+):
     route = respx_mock.get(f"{API}/binary/{ENCODED_REVISION}/comp-1/matches").mock(
         return_value=httpx.Response(200, json={"results": [], "totalCount": 0})
     )
@@ -215,13 +213,15 @@ async def test_binary_revision_detail_component_matches(settings, respx_mock, ma
     )
     await client.aclose()
 
-    _assert_raw_path(route.calls.last.request, f"/binary/{ENCODED_REVISION}/comp-1/matches")
+    assert_raw_path(route.calls.last.request, f"/binary/{ENCODED_REVISION}/comp-1/matches")
     assert _query_pairs(route.calls.last.request) == [("page", "2"), ("pageSize", "50")]
     assert result["endpoint"] == "GET /binary/{revisionLocator}/{componentId}/matches"
 
 
 @pytest.mark.asyncio
-async def test_binary_revision_detail_dependency_components(settings, respx_mock, make_context):
+async def test_binary_revision_detail_dependency_components(
+    settings, respx_mock, make_context, assert_raw_path
+):
     route = respx_mock.get(f"{API}/binary/{ENCODED_REVISION}/{ENCODED_DEPENDENCY}/components").mock(
         return_value=httpx.Response(200, json={"results": []})
     )
@@ -235,7 +235,7 @@ async def test_binary_revision_detail_dependency_components(settings, respx_mock
     )
     await client.aclose()
 
-    _assert_raw_path(
+    assert_raw_path(
         route.calls.last.request,
         f"/binary/{ENCODED_REVISION}/{ENCODED_DEPENDENCY}/components",
     )
@@ -984,7 +984,7 @@ async def test_search_cves_query(settings, respx_mock, make_context):
 
 @pytest.mark.asyncio
 async def test_get_vulnerability_remediation_encodes_both_path_segments(
-    settings, respx_mock, make_context
+    settings, respx_mock, make_context, assert_raw_path
 ):
     route = respx_mock.get(
         f"{API}/vulns/CVE-2021-44228_mvn%2Blog4j/revisions/{ENCODED_REVISION}/remediation-guidance"
@@ -1001,7 +1001,7 @@ async def test_get_vulnerability_remediation_encodes_both_path_segments(
     await client.aclose()
 
     assert route.calls.last.request.method == "GET"
-    _assert_raw_path(
+    assert_raw_path(
         route.calls.last.request,
         f"/vulns/CVE-2021-44228_mvn%2Blog4j/revisions/{ENCODED_REVISION}/remediation-guidance",
     )

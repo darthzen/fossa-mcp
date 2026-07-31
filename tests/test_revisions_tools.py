@@ -53,7 +53,9 @@ def _query_pairs(request: httpx.Request) -> list[tuple[str, str]]:
 # --- scans -------------------------------------------------------------------
 
 
-async def test_list_revision_scans_endpoint_and_query(settings, respx_mock, make_context):
+async def test_list_revision_scans_endpoint_and_query(
+    settings, respx_mock, make_context, assert_raw_path
+):
     route = respx_mock.get(f"{BASE}/revisions/{ENCODED_REVISION}/scans").mock(
         return_value=httpx.Response(
             200, json={"results": [{"id": 5}], "page": 2, "pageSize": 25, "totalCount": 30}
@@ -66,10 +68,12 @@ async def test_list_revision_scans_endpoint_and_query(settings, respx_mock, make
     )
     await client.aclose()
 
-    # Matching the route is itself the assertion that the locator was
-    # percent-encoded into the path; httpx re-decodes `url.path`.
     request = route.calls.last.request
     assert request.method == "GET"
+    # Asserted on the bytes sent. Route matching proves nothing here: respx
+    # normalizes both sides, so `git+github.com/acme/widget$abc123` unescaped
+    # would match this route while addressing a completely different path.
+    assert_raw_path(request, f"/revisions/{ENCODED_REVISION}/scans")
     assert _query_pairs(request) == [("page", "2"), ("pageSize", "25")]
     assert result["endpoint"] == "GET /revisions/{locator}/scans"
     assert result["data"]["totalCount"] == 30
@@ -597,7 +601,7 @@ async def test_public_report_refuses_and_sends_nothing_when_writes_disabled(
 
 
 async def test_update_revision_sends_only_the_fields_given(
-    writable_settings, respx_mock, make_context
+    writable_settings, respx_mock, make_context, assert_raw_path
 ):
     route = respx_mock.patch(f"{BASE}/revisions/{ENCODED_REVISION}").mock(
         return_value=httpx.Response(200, json={"locator": FULL_REVISION})
@@ -615,6 +619,7 @@ async def test_update_revision_sends_only_the_fields_given(
 
     request = route.calls.last.request
     assert request.method == "PATCH"
+    assert_raw_path(request, f"/revisions/{ENCODED_REVISION}")
     assert _query_pairs(request) == []
     assert json.loads(request.content) == {
         "link": "https://ci.example.com/build/12",

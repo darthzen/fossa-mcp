@@ -116,7 +116,7 @@ async def test_get_security_policy_falls_back_to_org_default_policy(
 
 @pytest.mark.asyncio
 async def test_evaluate_security_policy_endpoint_and_verdict(
-    settings, respx_mock, make_context, tmp_path
+    settings, respx_mock, make_context, tmp_path, assert_raw_path
 ):
     settings = settings.model_copy(
         update={
@@ -161,10 +161,11 @@ async def test_evaluate_security_policy_endpoint_and_verdict(
     )
     await client.aclose()
 
-    # Matching the respx route is itself the assertion that the locator was
-    # percent-encoded into the path correctly; httpx re-decodes `url.path`.
     request = deps_route.calls.last.request
     assert request.method == "GET"
+    # Encoding is asserted on the bytes sent, not by the route matching: respx
+    # normalizes both sides, so an unescaped `$` would match this route too.
+    assert_raw_path(request, f"/v2/revisions/{ENCODED_REVISION}/dependencies")
     pairs = _query_pairs(request)
     assert ("depth[]", "direct") in pairs
     assert ("count", "50") in pairs
@@ -264,7 +265,7 @@ async def test_assign_refuses_and_sends_nothing_when_writes_disabled(
 
 @pytest.mark.asyncio
 async def test_enable_security_policy_sends_expected_put_body(
-    writable_settings, respx_mock, make_context
+    writable_settings, respx_mock, make_context, assert_raw_path
 ):
     respx_mock.get(f"https://app.fossa.com/api/projects/{ENCODED_PROJECT}").mock(
         return_value=httpx.Response(200, json=PROJECT_BODY)
@@ -281,6 +282,7 @@ async def test_enable_security_policy_sends_expected_put_body(
 
     request = put_route.calls.last.request
     assert request.method == "PUT"
+    assert_raw_path(request, f"/projects/{ENCODED_PROJECT}")
     assert json.loads(request.content) == {
         "securityPolicyId": 9,
         "securityIssueScanningEnabled": True,

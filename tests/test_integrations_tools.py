@@ -653,7 +653,7 @@ async def test_delete_custom_risk_score_sends_the_scope_and_accepts_204(
 
 @pytest.mark.asyncio
 async def test_list_snippets_default_view_sends_plain_repeated_filter_keys(
-    settings, respx_mock, make_context
+    settings, respx_mock, make_context, assert_raw_path
 ):
     route = respx_mock.get(f"{BASE}/revisions/{ENCODED_REVISION}/snippets").mock(
         return_value=httpx.Response(200, json={"results": [], "totalCount": 0})
@@ -677,9 +677,10 @@ async def test_list_snippets_default_view_sends_plain_repeated_filter_keys(
     )
     await client.aclose()
 
-    # The route matching on the encoded path is the assertion that the locator
-    # was percent-encoded; httpx re-decodes `url.path`.
     assert route.called
+    # The route matching does not prove the locator was encoded — respx
+    # normalizes the URL on both sides — so assert the bytes that were sent.
+    assert_raw_path(route.calls.last.request, f"/revisions/{ENCODED_REVISION}/snippets")
     assert _query_pairs(route.calls.last.request) == [
         ("path", "src/vendor"),
         ("ids", "s1"),
@@ -951,7 +952,7 @@ async def test_get_snippet_requires_a_path_for_match_details(settings, respx_moc
 
 @pytest.mark.asyncio
 async def test_reject_snippets_by_explicit_ids_is_a_plain_write(
-    writable_settings, respx_mock, make_context
+    writable_settings, respx_mock, make_context, assert_raw_path
 ):
     route = respx_mock.post(f"{BASE}/revisions/{ENCODED_REVISION}/snippets/reject").mock(
         return_value=httpx.Response(204)
@@ -971,6 +972,7 @@ async def test_reject_snippets_by_explicit_ids_is_a_plain_write(
 
     request = route.calls.last.request
     assert request.method == "POST"
+    assert_raw_path(request, f"/revisions/{ENCODED_REVISION}/snippets/reject")
     assert _body(request) == {
         "path": "src/vendor",
         "ids": ["s1", "s2"],
