@@ -3,11 +3,14 @@
   "checkpoint_id": "ef03ca039739",
   "strategy": "manual-commit",
   "branch": "block-package-tools",
-  "checkpoints_count": 1,
+  "checkpoints_count": 3,
   "files_touched": [
     "src/fossa_mcp/client.py",
     "src/fossa_mcp/models.py",
-    "src/fossa_mcp/server.py"
+    "src/fossa_mcp/server.py",
+    "src/fossa_mcp/tools/packages.py",
+    "tests/test_mcp_integration.py",
+    "tests/test_package_tools.py"
   ],
   "sessions": [
     {
@@ -16,13 +19,20 @@
       "compact_transcript": "/ef/03ca039739/0/transcript.jsonl",
       "content_hash": "/ef/03ca039739/0/content_hash.txt",
       "prompt": "/ef/03ca039739/0/prompt.txt"
+    },
+    {
+      "metadata": "/ef/03ca039739/1/metadata.json",
+      "transcript": "/ef/03ca039739/1/full.jsonl",
+      "compact_transcript": "/ef/03ca039739/1/transcript.jsonl",
+      "content_hash": "/ef/03ca039739/1/content_hash.txt",
+      "prompt": "/ef/03ca039739/1/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 129,
-    "cache_creation_tokens": 157530,
-    "cache_read_tokens": 8906314,
-    "output_tokens": 42711,
-    "api_call_count": 68
+    "input_tokens": 136,
+    "cache_creation_tokens": 163077,
+    "cache_read_tokens": 9278558,
+    "output_tokens": 46877,
+    "api_call_count": 72
   }
 }
