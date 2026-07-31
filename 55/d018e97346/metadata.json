@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "55d018e97346",
+  "strategy": "manual-commit",
+  "branch": "skills",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "skills/fossa-api-audit/SKILL.md",
+    "skills/fossa-attribution/SKILL.md",
+    "skills/fossa-license-review/SKILL.md",
+    "skills/fossa-spec-drift/SKILL.md",
+    "skills/fossa-vuln-export/SKILL.md",
+    "skills/fossa-vuln-export/references/field-mapping.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/55/d018e97346/0/metadata.json",
+      "transcript": "/55/d018e97346/0/full.jsonl",
+      "compact_transcript": "/55/d018e97346/0/transcript.jsonl",
+      "content_hash": "/55/d018e97346/0/content_hash.txt",
+      "prompt": ""
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 89,
+    "cache_creation_tokens": 135907,
+    "cache_read_tokens": 5156754,
+    "output_tokens": 27134,
+    "api_call_count": 47
+  }
+}
