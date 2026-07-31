@@ -103,9 +103,13 @@ exactly the failure mode to avoid.
 
 ---
 
-## 5. The server is no longer wholly read-only. Security policy writes are permitted.
+## 5. The server is no longer wholly read-only. Policy and package-block writes are permitted.
 
 **Decided 2026-07-31. This reverses part of decision-adjacent scope set on 2026-07-29.**
+**Amended 2026-07-31** — see "Correction" at the end of this entry. Two claims made here about
+what the FOSSA API does not support were inferred from the vendored spec and are false of the live
+API. They are struck through below rather than deleted, because the entry is also a record of how
+the mistake was made.
 
 `FOSSA_MCP_IMPLEMENTATION_SCOPE.md` §3.3 lists "policy modification" as out of scope, and the README
 promised "this version is read-only and does not modify FOSSA state." Both were accurate and both
@@ -118,33 +122,62 @@ match; this entry is the record that the two now disagree, and this entry wins.
 
 **What is writable, and nothing else:**
 
-| Tool | Endpoint | Effect |
-|------|----------|--------|
-| `fossa_enable_security_policy` | `PUT /projects/{locator}` | Sets `securityPolicyId`, `securityIssueScanningEnabled`, `securityStatusCheckEnabled` |
-| `fossa_assign_security_policy_to_projects` | `PUT /v2/projects/policy` | Assigns one policy id to explicitly named projects |
+| Tool | Tier | Endpoint | Effect |
+|------|------|----------|--------|
+| `fossa_enable_security_policy` | write | `PUT /projects/{locator}` | Sets `securityPolicyId`, `securityIssueScanningEnabled`, `securityStatusCheckEnabled` |
+| `fossa_assign_security_policy_to_projects` | write | `PUT /v2/projects/policy` | Assigns one policy id to explicitly named projects |
+| `fossa_block_package` | write | `POST /packages/{locator}/rules` | Adds a `blacklisted_dependency` rule for one package to named quality policies |
+| `fossa_unblock_package` | destructive | `PUT /policies/{id}/rules` | Replaces a quality policy's whole rule set with the rules surviving that package's removal |
 
 Everything else in §3.3 stays out of scope. Issue ignoring, project deletion, label modification,
 license conclusions, and disputes remain unimplemented.
 
 **Consequences:**
 
-- **`FOSSA_ALLOW_WRITES` defaults to false and must stay that way.** Both write tools refuse before
+- **`FOSSA_ALLOW_WRITES` defaults to false and must stay that way.** Every write tool refuses before
   issuing any request when it is off. A server that is merely *capable* of writing is not the same
   risk as one that will; under decision 2 every caller shares one token, so the default must be the
-  safe one. `tests/test_mcp_integration.py` asserts a default-configured server refuses the write.
+  safe one. `tests/test_mcp_integration.py` asserts a default-configured server refuses every write.
 - The bulk endpoint's "apply to all projects matching these filters" mode is deliberately not
   exposed. `locators` is always an explicit list. A model that misreads a filter should not be able
   to re-policy an entire organization in one call.
-- `FossaClient` retries writes. That is safe only because both endpoints are `PUT` and assign rather
-  than accumulate. Adding `POST` or `PATCH` requires revisiting the retry loop first.
+- `FossaClient` retries the `PUT` writes. That is safe because each assigns or replaces whole state
+  rather than accumulating, so a replay converges. `POST /packages/{locator}/rules` is a `POST` and
+  is therefore never replayed (`_IDEMPOTENT_METHODS`), even though FOSSA happens to treat it
+  idempotently — the retry loop stays verb-driven, not endpoint-driven.
 - `readOnlyHint` is now per-tool rather than blanket. The integration test partitions the tool list
-  into declared read and write sets and fails if a tool's annotation disagrees with its set.
+  into declared read and write sets and fails if a tool's annotation disagrees with its set. It
+  checks `destructiveHint` against the destructive set the same way.
+- **`fossa_unblock_package` is `DESTRUCTIVE`, not `WRITE`.** FOSSA has no delete for one rule; the
+  only removal mechanism replaces the policy's entire rule set, with no ETag, `If-Match`, or version
+  precondition on offer. Its blast radius is every rule on the policy rather than the one named, and
+  two concurrent unblocks silently clobber each other. That is the tier boundary from decision 7 —
+  tier follows blast radius, not verb.
 
-**Why there is no "block this package" tool:** FOSSA has no per-package block primitive. A package is
-blocked by an assigned security policy raising a vulnerability issue against it and the CI status
+~~**Why there is no "block this package" tool:** FOSSA has no per-package block primitive. A package
+is blocked by an assigned security policy raising a vulnerability issue against it and the CI status
 check then failing the build. `fossa_enable_security_policy` turns that combination on; that *is* the
 block. Nor is there a create-policy or list-policies endpoint in the vendored spec, so policies are
-authored in the FOSSA web app and addressed here by the numeric id in their URL.
+authored in the FOSSA web app and addressed here by the numeric id in their URL.~~
+
+**Correction — 2026-07-31.** Both claims in the struck paragraph are wrong about the live API. They
+were true of the *documented* surface and were generalized to the product, which is the error worth
+remembering: the vendored spec is a description of what FOSSA documents, not of what FOSSA does.
+
+1. **FOSSA does have a per-package block primitive.** It is a `blacklisted_dependency` rule on a
+   **QUALITY** policy, created by `POST /api/packages/{locator}/rules`. Chelsea Boling (Principal CS
+   Engineer, FOSSA) corrected this directly; it was then confirmed empirically — the block dialog's
+   policy selector offers only quality policies, and a security policy cannot receive a block rule at
+   all. The security policy tools do real work but **are not the blocking mechanism**.
+2. **`GET /api/policies` exists** and lists every policy with its full rule set, type, and
+   `latestVersion`. Policies still have to be authored in the web app, but they no longer have to be
+   addressed by reading an id out of a URL. No tool wraps this endpoint yet.
+
+Neither endpoint appears anywhere in the vendored OpenAPI spec, and FOSSA owes no stability on
+either. Both were captured from the FOSSA web app's own traffic and then verified against the live
+API; the verified request schemas live in `src/fossa_mcp/tools/packages.py` and are pinned by
+`tests/test_package_tools.py`. The capture notes themselves are kept outside this repository —
+mapping a vendor's undocumented API surface is not something this project publishes.
 
 ---
 

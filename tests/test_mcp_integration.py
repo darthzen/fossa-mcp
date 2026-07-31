@@ -240,6 +240,9 @@ EXPECTED_DESTRUCTIVE_TOOL_NAMES = {
     # inventory: unconcluding removes a conclusion, and an organization-scoped
     # conclusion re-licenses every project at once
     "fossa_set_license_conclusion",
+    # packages: FOSSA has no single-rule delete, so unblocking rewrites the
+    # policy's entire rule set — the blast radius is every rule on the policy
+    "fossa_unblock_package",
 }
 
 # One valid call per write tool, used to prove the write gate refuses before any
