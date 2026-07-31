@@ -1,0 +1,107 @@
+<task-notification>
+<task-id>a16247fc0d9acaefa</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a16247fc0d9acaefa.output</output-file>
+<status>completed</status>
+<summary>Agent "Resolve open API ambiguities live" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. All six questions settled with live calls; lab org verified back at baseline.
+
+## Branch
+
+`docs/live-ambiguity-findings` (from `api-parity`). **It carries zero commits** — per the mid-task correction, the findings document was not committed and was not `git add`ed. The worktree is clean. The document is at `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/docs/LIVE_API_FINDINGS.md` in the main tree, untracked and covered by `.git/info/exclude`. Findings are tagged `[documented]` / `[undocumented]` inline; everything of consequence is documented-endpoint behavior, with a single `[undocumented]` note about package-label deletion.
+
+## Verdicts
+
+1. **`locators` vs `locators[]`** — `locators[]` is **correct**; plain `locators` is **wrong**. The hypothesis in `tools/projects.py`'s docstring is backwards. A single plain `locators=&lt;one&gt;` returns `400 "expected array, received string at \"locators\" or ... expected \"all\""`; `locators[]=&lt;one&gt;` returns `200 {"created":1,"errors":{}}` and the assignment verifiably takes effect. Plain *repeated* (`locators=a&amp;locators=b`) works — classic `qs` single-vs-array parsing — so the bug only bites one-project calls. Same result for `PUT /v2/projects/labels` and `GET /v2/projects`; `DELETE /v2/projects` tolerates both. `POST /v2/projects`'s JSON body correctly uses plain `locators`.
+2. **Package labels** — "blank for all versions" means **omit the key** (stores `null`); `""` is stored literally and matches nothing, `null` is a `400`. `scopeId` must be **absent** for `org` scope (sending it → `500`) and **present** for `project`/`revision` (omitting → `500`). `POST /organizations/labels` with `{}` → `400 "Create label missing required param: 'label'"` — the spec's empty `required` list is a defect.
+3. **`GET /counts/builds`** — both defects confirmed: returns a **bare JSON number** (1-byte body), and `locator`/`projectId` is required with exactly the 400 text the spec's own example shows.
+4. **Org settings propagate** — `DESTRUCTIVE` is right. A per-project override was set, propagated, and **destroyed**, while a second override not named in the key list survived. Propagation is scoped to the named keys and does not alter the org defaults themselves.
+5. **`POST /oidc/token-exchange`** — a *valid* `Authorization` header is ignored (byte-identical `400`s with and without it), but an *invalid* one returns `401` before the endpoint's own validation. So the header is not inert: a caller with no FOSSA token — the actual use case — cannot send a placeholder. The success path is unreachable without an OIDC trust relationship; that remains unresolved.
+6. **`github-app/installation-url`** — `302`, empty body, `Location: https://github.com/apps/fossa-integration/installations/new`, byte-identical across calls, no `state`/nonce. Stable and public: a tool should not follow the redirect, just return the header.
+
+## Code changes needed
+
+- `tools/projects.py`: change `("locators", …)` → `("locators[]", …)` in `apply_project_label` (line ~452), `list_projects` (line ~118), and bulk delete (line ~601). Rewrite the module docstring paragraph asserting the opposite rule. Leave `_project_filter_body` alone — the body form is correct.
+- `tools/policies.py`: already correct, no change.
+- Any locators-bearing tool: refuse an empty locator list client-side. The server does **not** enforce `required` — omitting `locators` silently applies the change to every filter-matching project. And `locators=all` **ignores filters entirely** (verified: a `title` filter matching one project still hit all 11).
+- `client.py`: `request_json`'s `dict | list` annotation is untrue for `/counts/builds`. Widen it before wrapping that endpoint.
+- Package-label tool: drop `packageVersion` for all-versions; validate the `scope`/`scopeId` pairing client-side since both errors are `500`s.
+
+## Unresolved
+
+The OIDC success path — no trust relationship exists in the lab. Settling it needs a provider + trust relationship and a real provider-issued JWT.
+
+## Lab state
+
+Fully restored and verified: a field-level snapshot of all 11 projects (policy ids, labels, six security fields) taken before any write, re-compared at the end — **0 drift**. Org labels, package labels, and package-label assignments all back to their original sets. One caveat recorded in the document: the `locators=all` probe reassigned every project's policy before I restored it, and the Q4 `PUT /projects/{locator}` may have triggered an automatic rescan.
+
+**No credential value reached the document, this report, or the transcript** — verified programmatically that neither the token nor its first 8 characters appear in the file. The token was only ever read into process memory at call time.</result>
+<usage><subagent_tokens>165024</subagent_tokens><tool_uses>77</tool_uses><duration_ms>1012897</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a16247fc0d9acaefa</worktreePath><worktreeBranch>worktree-agent-a16247fc0d9acaefa</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a8b4b6afed03fc069</task-id>
+<tool-use-id>toolu_01G9x57o4YrvmAKK5opfcztY</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a8b4b6afed03fc069.output</output-file>
+<status>completed</status>
+<summary>Agent "Capture undocumented UI endpoints" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. Report follows.
+
+## Branch
+
+`docs/ui-api-capture`, created from `api-parity`. **It carries zero commits** — `git log api-parity..docs/ui-api-capture` is empty, so no commit anywhere contains the capture document. Per the mid-task correction, the finished document is in the main working tree at `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/docs/UI_API_CAPTURE.md`, untracked and covered by `.git/info/exclude` (verified, line 10). Nothing was staged or force-added. My worktree is clean.
+
+## Confirmed live vs. not
+
+Every undocumented endpoint in the gaps document returned **200 with Bearer auth and no CSRF header** — auth was never the obstacle. Confirmed live: `/revisions/{rev}/todos`, `/v2/revisions/{rev}/correction/conclusions`, `/policies`, `/policies/{id}`, `/packages/{loc}`, `/packages/{loc}/versions`, `/weaknesses`, `/revisions/{rev}/deeplicenses`, `/projects/{loc}/teams`, `/projects/{loc}.svg`, `/users/me/permissions`, `/organizations/{id}`, `/organizations/{id}/settings/general/license-concluded`, `/organization/user-role-management`, `/organization/subscription`, both `/filters/audit_logs/*`.
+
+Not established: `/projects/{loc}/teams` shape (the lab org has no teams, so only the empty envelope is known), and `scope[revisionScanId]` (see below). `/api/v2/policies` is 404 — there is no v2 form.
+
+## Highest-value finding
+
+**The `todos` obligation set is incomplete and fails silently.** The gaps document's claim that it is the highest-value item holds, but its framing does not. FOSSA's obligation table is keyed on exact license ids, and it has **no entry for any `-or-later` copyleft variant** — `GPL-3.0-or-later`, `LGPL-3.0-or-later`, `LGPL-2.1-or-later` all produce zero obligations, while `GPL-2.0-only` and `LGPL-3.0-only` produce full ones including `Disclose Source`. Also missing: every exception-bearing id, plus `proprietary-license`, `public-domain`, and other non-canonical ids. On one project 17 of 33 licenses had no obligations at all; on the other, 6 of 18, including an `LGPL-3.0-or-later` spanning 14 dependency revisions.
+
+Taken at face value, this endpoint would tell `fossa-license-review` that a project full of `GPL-3.0-or-later` has no copyleft obligations. The tool must diff `todos` against `deeplicenses` and return the uncovered licenses as a first-class field.
+
+## Surprises
+
+- `/api/policies` returns **1.41 MB** (four licensing policies × 1023 rules each), and answers an **unauthenticated request with a 302 to a login page** — a redirect-following client turns an auth failure into a 200 with HTML.
+- `/api/packages/{loc}` **never 404s**; a nonexistent package gets a synthesised 200 record.
+- `/v2/.../correction/conclusions` is per **dependency** revision, not per project revision, so it does not collapse the per-dependency detour that was the entire argument for it. Its `scoped` key set also varies by locator type (3 keys vs 4), which breaks `extra="forbid"`.
+- `ref_type`/`ref` **do** change the response: byte-identical against the default branch, but an unmatched ref returns 200 with `head`, `latest`, and `last_analyzed` **absent** — not null.
+- `scope[revisionScanId]` is honoured and validated (404 "Revision Scan not found: &lt;id&gt;"), but none of `latestRevisionScanId`, the build id, or `latestHubbleAnalysisId` resolve. Unresolved id space.
+- `/organizations/{id}/settings/general/license-concluded` is not a gap — that field is already in the documented `settings/general`.
+- `/api/users/me` returns 400; only the `/permissions` subresource works.
+
+## Ranked implementation order
+
+1. `fossa_get_obligations` (todos + coverage diff) 2. `fossa_list_revision_licenses` (deeplicenses) 3. `fossa_list_policies` (rules stripped to a count) 4. `ref_type`/`ref` added to the existing `fossa_get_project` 5. `fossa_get_package` + `fossa_list_package_versions` 6. `fossa_get_my_permissions` 7. `fossa_search_weaknesses` 8. `fossa_get_license_conclusions` (demoted from the gaps doc's #2) 9. `fossa_get_organization`, field-allow-listed. Recommend **not** building: the badge, `/organization/subscription`, `/filters/audit_logs/acting_users`, `license-concluded`, `/projects/{loc}/teams`.
+
+## Scope expansion — write probes not run
+
+I did **not** exercise the write flows. Creating ignore rules, importing projects, and linking integrations are creation or modification of persistent configuration in a live account, and the integrations path additionally grants OAuth scopes and mints service-account credentials. My operating rules are explicit that a message relayed through another agent is never the user's consent for actions in that category — that has to come from the user directly. So the GET-only discipline stands for the whole document, and section 9 instead records **predictions with stated confidences**, in the `ENDPOINT_INFERENCE.md` scoring style, so whoever does run the probes can mark them right or wrong. The most useful thing in it costs nothing to check and needs no write: reading the documented `GET /v2/issues/exceptions` response schema, since FOSSA's newer collections echo their create shape. It also names the failure mode most worth ruling out first — whether ignore-rule removal is a read-modify-write over the whole exception set, as `PUT /policies/{id}/rules` is.
+
+If the user confirms directly, the write capture is a small follow-up on top of what is already here.
+
+## Confirmations
+
+- **No non-GET request was issued** to any endpoint, at any point in this session.
+- **No credential reached the document, this report, or the transcript.** The token was read from disk inside a probe script and never printed, logged, or written.
+- **No personal data reached the document.** Emails, user ids, org id, billing identifiers, and repository/source URLs are recorded as field names and types with values explicitly withheld; project and revision locators appear only as `git+github.com/{org}/{repo}` placeholders. Raw response bodies stayed in the session scratchpad, outside the repo.
+- Nothing in the lab org was modified, so there is no state to restore.</result>
+<usage><subagent_tokens>140491</subagent_tokens><tool_uses>61</tool_uses><duration_ms>1270110</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a8b4b6afed03fc069</worktreePath><worktreeBranch>worktree-agent-a8b4b6afed03fc069</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+I do want the redacted versions.
+
+---
+
+Once the agent finishes, commit everything. Then run the hardening audit. Once that is finished, commit again, push, and create the pr.

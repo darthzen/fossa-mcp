@@ -1,0 +1,48 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "9b6de5ea545c",
+  "session_id": "899a85f2-f3de-4884-af5c-d4ca8f9faf54",
+  "strategy": "manual-commit",
+  "created_at": "2026-07-31T22:54:37.183452Z",
+  "branch": "parity/client-hygiene",
+  "checkpoints_count": 1,
+  "save_step_count": 2,
+  "files_touched": [
+    "src/fossa_mcp/client.py"
+  ],
+  "agent": "Claude Code",
+  "model": "claude-opus-5",
+  "turn_id": "bc142e6c7271",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 322,
+    "cache_creation_tokens": 371764,
+    "cache_read_tokens": 39973731,
+    "output_tokens": 184109,
+    "api_call_count": 171
+  },
+  "session_metrics": {
+    "turn_count": 19
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-07-31T22:54:37.085256Z",
+    "agent_lines": 0,
+    "agent_removed": 6,
+    "human_added": 318,
+    "human_modified": 6,
+    "human_removed": 0,
+    "total_committed": 319,
+    "total_lines_changed": 544,
+    "agent_percentage": 1.1029411764705883,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    }
+  ]
+}
