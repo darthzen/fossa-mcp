@@ -101,3 +101,7 @@ If the user confirms directly, the write capture is a small follow-up on top of 
 ---
 
 I do want the redacted versions.
+
+---
+
+Once the agent finishes, commit everything. Then run the hardening audit. Once that is finished, commit again, push, and create the pr.
