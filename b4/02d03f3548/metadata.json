@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "b402d03f3548",
+  "strategy": "manual-commit",
+  "branch": "block-package-tools",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "docs/ENDPOINT_INFERENCE.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/b4/02d03f3548/0/metadata.json",
+      "transcript": "/b4/02d03f3548/0/full.jsonl",
+      "compact_transcript": "/b4/02d03f3548/0/transcript.jsonl",
+      "content_hash": "/b4/02d03f3548/0/content_hash.txt",
+      "prompt": "/b4/02d03f3548/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 184,
+    "cache_creation_tokens": 308653,
+    "cache_read_tokens": 22215982,
+    "output_tokens": 114221,
+    "api_call_count": 99
+  }
+}
