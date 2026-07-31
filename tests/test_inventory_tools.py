@@ -17,6 +17,7 @@ from datetime import date, datetime
 
 import httpx
 import pytest
+from pydantic import ValidationError
 
 from fossa_mcp.client import FossaClient
 from fossa_mcp.config import Settings
@@ -930,7 +931,6 @@ async def test_get_builds_list_query(settings, respx_mock, make_context):
     await inventory.get_builds(
         make_context(client, settings),
         locator=REVISION,
-        project_id=PROJECT,
         start_date=datetime(2026, 1, 1),
         end_date=datetime(2026, 2, 1),
         page=2,
@@ -941,13 +941,56 @@ async def test_get_builds_list_query(settings, respx_mock, make_context):
 
     assert _query_pairs(route.calls.last.request) == [
         ("locator", REVISION),
-        ("projectId", PROJECT),
         ("startDate", "2026-01-01T00:00:00"),
         ("endDate", "2026-02-01T00:00:00"),
         ("pageSize", "10"),
         ("page", "2"),
         ("sort", "-createdAt,id"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_builds_accepts_project_id_instead_of_locator(settings, respx_mock, make_context):
+    route = respx_mock.get(f"{API}/builds").mock(return_value=httpx.Response(200, json=[]))
+
+    client = FossaClient(settings)
+    await inventory.get_builds(make_context(client, settings), project_id=PROJECT)
+    await client.aclose()
+
+    assert _query_pairs(route.calls.last.request) == [("projectId", PROJECT)]
+
+
+@pytest.mark.asyncio
+async def test_get_builds_without_a_target_refuses_before_requesting(
+    settings, respx_mock, make_context
+):
+    """The spec calls both optional; FOSSA 400s a call carrying neither.
+
+    The default call was therefore a guaranteed round trip to a 400. It is now
+    refused in the input model, so the refusal costs no HTTP call.
+    """
+    client = FossaClient(settings)
+    for view in ("list", "count"):
+        with pytest.raises(ValidationError, match="exactly one of locator"):
+            await inventory.get_builds(make_context(client, settings), view=view)
+    await client.aclose()
+
+    assert respx_mock.calls.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_get_builds_with_both_targets_refuses_before_requesting(
+    settings, respx_mock, make_context
+):
+    """Two targets are two different questions, so the tool asks which one."""
+    client = FossaClient(settings)
+    with pytest.raises(ValidationError, match="exactly one of locator"):
+        await inventory.get_builds(
+            make_context(client, settings), locator=REVISION, project_id=PROJECT
+        )
+    await client.aclose()
+
+    assert respx_mock.calls.call_count == 0
 
 
 @pytest.mark.asyncio

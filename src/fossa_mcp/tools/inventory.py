@@ -961,11 +961,18 @@ async def get_builds(
     List FOSSA build records for a revision or project, or count them.
 
     Read-only. A build is one scan attempt, with its task status, warnings, and
-    error — this is the "why has this revision not analyzed" view. Both
-    parameters are documented as optional, but FOSSA answers 400 unless locator
-    or project_id is given. `sort` is a comma-separated column list where a
-    leading "-" means descending, over cliVersionId, createdAt, id, locator,
-    ownerId, taskId, and updatedAt.
+    error — this is the "why has this revision not analyzed" view.
+
+    Pass exactly one of `locator` (the builds of a single revision) or
+    `project_id` (the builds of every revision of one project). FOSSA's spec
+    declares both optional; that is a spec defect, because the live API rejects
+    a request carrying neither with `400 'locator' or 'projectId' must be passed
+    in to this endpoint`. This tool refuses that call before it builds a
+    request rather than spending a round trip on a certain 400.
+
+    `sort` is a comma-separated column list where a leading "-" means
+    descending, over cliVersionId, createdAt, id, locator, ownerId, taskId, and
+    updatedAt.
     """
     validated = BuildReadInput(
         view=view,

@@ -508,7 +508,17 @@ class LicenseConclusionInput(BaseModel):
 
 
 class BuildReadInput(BaseModel):
-    """Input model for fossa_get_builds."""
+    """Input model for fossa_get_builds.
+
+    `GET /builds` and `GET /counts/builds` both declare `locator` and
+    `projectId` optional, and both are wrong about it: live FOSSA answers a call
+    carrying neither with `400 MalformedPayloadError: Validation error:
+    'locator' or 'projectId' must be passed in to this endpoint`. Taking the
+    spec at its word meant the tool's default call was a guaranteed round trip
+    to a 400 — the one class of error these input models otherwise catch before
+    a request is built. The either-or is enforced here instead, so the refusal
+    costs no HTTP call.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -520,6 +530,17 @@ class BuildReadInput(BaseModel):
     page: int | None = Field(default=None, ge=1)
     page_size: int | None = Field(default=None, ge=1)
     sort: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_target(self) -> "BuildReadInput":
+        if (self.locator is None) == (self.project_id is None):
+            raise ValueError(
+                "pass exactly one of locator (one revision) or project_id (every "
+                "revision of one project). The vendored spec declares both optional, "
+                "but FOSSA does not: a request carrying neither is rejected with "
+                "400 \"'locator' or 'projectId' must be passed in to this endpoint\"."
+            )
+        return self
 
 
 class CveSearchInput(BaseModel):
