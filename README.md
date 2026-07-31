@@ -1,4 +1,6 @@
 # FOSSA MCP Server
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_shield)
+
 
 A Model Context Protocol server for the FOSSA API that allows AI assistants to inspect FOSSA organizations and answer practical software composition analysis questions.
 
@@ -220,6 +222,7 @@ Apply security policy 7 to <PROJECT_LOCATOR> and turn on blocking.
 ```
 
 ## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_large)
 
 Licensed under the [Apache License, Version 2.0](LICENSE). See [NOTICE](NOTICE) for attribution,
 the trademark disclaimer, and third-party license information.
@@ -232,6 +235,4 @@ separate from this project's.
 
 Project decisions — including the deliberate `mcp` version pin and the single-tenant constraint —
 are recorded in [DECISIONS.md](DECISIONS.md).
-
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp.svg?type=large&issueType=license)](https://app.fossa.com/projects/git%2Bgithub.com%2Fdarthzen%2Ffossa-mcp?ref=badge_large&issueType=license)
 
