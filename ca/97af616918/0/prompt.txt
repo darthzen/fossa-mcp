@@ -1,0 +1,689 @@
+Create the email. Include the summary of your work as well as the new skills that were just mmerged in the main repo.
+
+---
+
+Both of those can move in, actually.
+
+---
+
+Leave the skills alone. I just wanted you to read them to summarize them. The other process is handling edits. 
+
+I’ll get to the email later. You go ahead and start firing off subagents to finish off the overall project.
+
+---
+
+<task-notification>
+<task-id>a9ba100966d2816b8</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a9ba100966d2816b8.output</output-file>
+<status>completed</status>
+<summary>Agent "Register batch 1 parity tools" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done.
+
+## Branch
+`parity/register-batch1`, branched from `api-parity`, one commit `18acc12`. Nothing pushed. `skills/` untouched.
+
+## Test counts
+- Baseline on `api-parity`: **281 passed, 1 deselected**
+- Final: **306 passed, 1 deselected** (+25: the single write-refusal test became 25 parametrized cases, plus one table-completeness test)
+- `ruff check`, `ruff format --check`, `pyright` all clean.
+
+## What got registered
+46 tools added; tool list went from 13 to **59** (36 read-only, 23 write). Every tool in the four modules is registered — nothing was skipped.
+
+**`_READ_ONLY`** (25 new): `get_projects_summary`, `get_project_associations`, `export_project_issues`; `list_revision_scans`, `get_revision_notice_files`, `get_revision_sbom`, `get_revision_remediation_guidance`, `get_revision_attribution_json`, `render_revision_attribution`, `list_revision_dependencies_v1`; `get_issue_facets`, `list_issue_revisions`, `compare_issue_summaries`, `get_issue_affected_projects`, `export_global_issues_csv`, `get_issue_exceptions`, `get_issue_overview`, `get_issue_filters`; `get_release_group`, `list_release_group_releases`, `get_release_group_release`, `get_release_group_attribution_report`, `get_release_group_attribution_status`.
+
+**`_WRITE`** (`destructiveHint=False`, `idempotentHint=True`): `update_project`, `apply_project_label`, `update_revision`, `extend_issue_exception`, `update_release_group`, `update_release_group_release`.
+
+**`_WRITE_ACCUMULATING`** (new; `destructiveHint=False`, `idempotentHint=False`): `generate_project_attribution_slug`, `email_revision_attribution`, `create_public_attribution_report`, `create_issue_dispute`, `export_issue_overview`, `save_issue_filter`, `create_release_group`, `create_release_group_release`, `queue_release_group_attribution_report`.
+
+**`_DESTRUCTIVE`** (new; `destructiveHint=True`, `idempotentHint=True`): `delete_project_attribution_slug`, `delete_project`, `delete_projects`, `delete_issue_exceptions`, `delete_issue_filter`, `delete_release_group`, `delete_release_group_release`.
+
+**`_DESTRUCTIVE_UNBOUNDED`** (new; `destructiveHint=True`, `idempotentHint=False`): `update_issues` only.
+
+`_POLICY_WRITE` is now an alias of `_WRITE` — the two carried byte-identical hints and the duplicate literal invited drift.
+
+## Judgement calls, not mechanical
+- **`fossa_update_issues`** picks WRITE or DESTRUCTIVE at call time from whether `issue_ids` is passed. A static annotation can't express that, so it advertises the worse case. `idempotentHint=False` because its `issueException` action creates a durable ignore rule.
+- **`fossa_generate_project_attribution_slug`** breaks every previously shared report link — a real argument for `destructiveHint=True`. Left False per your rule that the hint is reserved for deletes and unbounded targets; the breakage is stated in the tool description instead. Flagging in case you'd rather flip it.
+- **`fossa_export_issue_overview`** and **`fossa_queue_release_group_attribution_report`** read data but create org-side background jobs, so they're writes and non-idempotent.
+- **Deletes get `idempotentHint=True`** — deleting twice removes nothing further, even though the second call may 404.
+
+## Refusal test
+Parametrized over all 25 write tools with *valid* arguments (invalid ones would produce the same isError-with-no-traffic result while proving nothing), asserting `isError`, `respx_mock.calls.call_count == 0`, and `FOSSA_ALLOW_WRITES` in the error text. A separate test asserts the argument table's keys equal `EXPECTED_WRITE_TOOL_NAMES` so it can't fall behind.
+
+## Defects noticed, not fixed
+1. **`client.py` cannot express "2xx with no body"** — `request_json` calls `.json()` on any 2xx and raises on 204. Worked around locally in `tools/issues.py` (`_request_tolerating_empty_body`) and again in `tools/projects.py` and `tools/release_groups.py` via `request_text`. Three modules independently patching the same client gap.
+2. **Bulk-parameter name disagreement**: `tools/projects.py` sends `locators`, `tools/policies.py` sends `locators[]` for the same style of bulk endpoint. The `api-parity` commit flags this as needing one live call to reconcile; it's still unreconciled.
+3. **`GET /revisions/{locator}/original-sbom` answers 302** and the tool reads the redirect target out of the *error body*, because the client neither follows redirects nor exposes headers. Works, but it's parsing an error path for a success value.
+4. **`FossaClient` retries idempotent methods**, and DECISIONS §7 says POST/PATCH are never retried. Batch 1 adds the first PATCH (`update_revision`) and many POSTs — worth confirming `_IDEMPOTENT_METHODS` actually excludes PATCH, which I did not verify.
+5. **`_READ_ONLY` leaves `destructiveHint`/`idempotentHint` unset (None)**, so per MCP spec defaults they nominally read as destructive/non-idempotent. Harmless because `readOnlyHint=True` dominates, and it's pre-existing, but it's why the new test only checks `destructiveHint` on the write tools.</result>
+<usage><subagent_tokens>137697</subagent_tokens><tool_uses>66</tool_uses><duration_ms>477310</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a9ba100966d2816b8</worktreePath><worktreeBranch>worktree-agent-a9ba100966d2816b8</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a984074bece0f0545</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a984074bece0f0545.output</output-file>
+<status>completed</status>
+<summary>Agent "Labels domain" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. All checks green.
+
+## Branch
+
+`parity/labels` (from `api-parity`), one commit: `28e31d0`.
+
+## Scope correction
+
+Four of the sixteen label operations were already built by sibling domains, so I did not duplicate them:
+
+- `GET /projects/{locator}/labels` → `projects.get_project_associations` (`sections=["labels"]`)
+- `PUT /v2/projects/labels` → `projects.apply_project_label`
+
+That leaves **12 operations**, all covered.
+
+## Tools — 11, in `src/fossa_mcp/tools/labels.py`
+
+| Tool | Endpoint | Tier |
+|---|---|---|
+| `fossa_list_package_labels` | `GET /package-labels` | read |
+| `fossa_create_package_labels` | `POST /package-labels` | WRITE |
+| `fossa_delete_package_labels` | `DELETE /package-labels` | DESTRUCTIVE |
+| `fossa_list_package_label_assignments` | `GET /package-label-assignments` | read |
+| `fossa_assign_package_labels` | `POST /package-label-assignments` | WRITE |
+| `fossa_bulk_assign_package_label` | `POST /package-label-assignments/bulk` | WRITE |
+| `fossa_set_package_label_assignments` | `PUT /package-label-assignments` | **DESTRUCTIVE** |
+| `fossa_unassign_package_labels` | `DELETE /package-label-assignments` | DESTRUCTIVE |
+| `fossa_list_organization_labels` | `GET /organizations/labels` + `/{id}` | read |
+| `fossa_create_organization_label` | `POST /organizations/labels` | WRITE |
+| `fossa_delete_organization_label` | `DELETE /organizations/labels/{id}` | DESTRUCTIVE |
+
+11 tools against a ~8 target. The only two merges available without magic dispatch were the org-label GET pair (done — one tool, optional `label_id`) and folding the single-package assign into the bulk assign. I rejected the latter: they are transposes (one package × many labels vs. one label × many packages) and merging them needs runtime dispatch on which list has length 1.
+
+## The bulk endpoint — the one you flagged
+
+`POST /package-label-assignments/bulk` is **WRITE**, not DESTRUCTIVE. It has no filter mode at all: the target set is `packageLocators`, an explicit `minItems: 1` list, and the operation only adds — the spec says duplicate assignments are skipped, nothing is removed. It is a server-side loop over the single-package assign.
+
+The endpoint that actually earns DESTRUCTIVE here is `PUT /package-label-assignments`. It is a reconcile: *"Existing assignments not present in the map are removed."* The target set is implicit (everything for that package at that scope) and removal is silent, so it is DESTRUCTIVE despite being a `PUT` — DECISIONS.md §7, tier follows blast radius.
+
+## Blank `packageVersion` — decision
+
+**Not expressible anywhere in the module.** FOSSA reads a missing `packageVersion` as *all versions*, so an omission is a widening, not a narrowing.
+
+- `assign_package_labels` requires **exactly one** of `package_version` (non-blank, `min_length=1`) or `apply_to_all_versions: bool = False`. Neither → `ValueError`; both → `ValueError`. All-versions is only reachable by naming a flag that says so, and the body then **omits** the `packageVersion` key rather than sending `""`.
+- `bulk_assign_package_label` exposes `apply_to_all_versions` mapping to the endpoint's inverted `shouldUseSpecificVersion`, always sent explicitly so the version behavior is visible in the wire body rather than inherited from FOSSA's default. Locators must contain `$`, so a caller cannot reach all-versions by dropping the version off a locator either.
+- The read tool's `package_version` filter is `min_length=1`; FOSSA's empty-string "all-versions rows" filter is not exposed, since `include_package_wide_labels` reaches the same rows alongside a real version.
+- The one place "every version" is data is `set_package_label_assignments`'s `new_label_ids`, where `"all"` is the key the endpoint itself defines. That is a key the caller typed, not an omission.
+
+## `server.py` registration snippet (not applied)
+
+```python
+from .tools import dependencies, issues, labels, policies, posture, projects, reports, revisions
+
+# Adds without removing. POST is never replayed by the client, so no
+# idempotency is promised for the two POST-backed tools.
+_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True
+)
+# Removes FOSSA state. Each converges on re-issue, hence idempotentHint=True.
+_DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True
+)
+
+mcp.tool(name="fossa_list_package_labels", annotations=_READ_ONLY)(labels.list_package_labels)
+mcp.tool(name="fossa_list_package_label_assignments", annotations=_READ_ONLY)(
+    labels.list_package_label_assignments
+)
+mcp.tool(name="fossa_list_organization_labels", annotations=_READ_ONLY)(
+    labels.list_organization_labels
+)
+mcp.tool(name="fossa_create_package_labels", annotations=_WRITE)(labels.create_package_labels)
+mcp.tool(name="fossa_assign_package_labels", annotations=_WRITE)(labels.assign_package_labels)
+mcp.tool(name="fossa_bulk_assign_package_label", annotations=_WRITE)(
+    labels.bulk_assign_package_label
+)
+mcp.tool(name="fossa_create_organization_label", annotations=_WRITE)(
+    labels.create_organization_label
+)
+mcp.tool(name="fossa_delete_package_labels", annotations=_DESTRUCTIVE)(
+    labels.delete_package_labels
+)
+mcp.tool(name="fossa_set_package_label_assignments", annotations=_DESTRUCTIVE)(
+    labels.set_package_label_assignments
+)
+mcp.tool(name="fossa_unassign_package_labels", annotations=_DESTRUCTIVE)(
+    labels.unassign_package_labels
+)
+mcp.tool(name="fossa_delete_organization_label", annotations=_DESTRUCTIVE)(
+    labels.delete_organization_label
+)
+```
+
+`_WRITE` / `_DESTRUCTIVE` will likely collide with the same names proposed by the projects/issues/revisions/release-groups agents — define once, shared. I verified this snippet against a throwaway `FastMCP` instance: all 11 register, `_forbid_unexpected_tool_arguments` rebuilds every schema, and `new_label_ids` emits a correct `additionalProperties: {type: array, items: {type: integer}}`. `fossa_list_package_labels` has an empty `properties` object, which still satisfies the `additionalProperties is False` assertion.
+
+## `test_mcp_integration.py` tier sets (not applied)
+
+`EXPECTED_READ_ONLY_TOOL_NAMES` += `fossa_list_package_labels`, `fossa_list_package_label_assignments`, `fossa_list_organization_labels`
+
+`EXPECTED_WRITE_TOOL_NAMES` += `fossa_create_package_labels`, `fossa_assign_package_labels`, `fossa_bulk_assign_package_label`, `fossa_create_organization_label`, `fossa_delete_package_labels`, `fossa_set_package_label_assignments`, `fossa_unassign_package_labels`, `fossa_delete_organization_label`
+
+The server `instructions` string still says "the two security policy tools" are the only writes; it needs rewriting once all domains land.
+
+## One `client.py` change — flagging, as instructed
+
+`request_text` gained an optional `json_body` keyword. This was unavoidable, not a convenience: `DELETE /package-labels` (204) and `DELETE /package-label-assignments` (200, no content) both **require** a JSON body and return an empty one. `request_json` chokes on the empty body; `request_text` had no way to send a body; no existing tool on this branch sends a body on a DELETE, so there was no pattern to reuse. The change is a pass-through into the existing `_request`. The retry loop and `_IDEMPOTENT_METHODS` are untouched.
+
+## Query conventions
+
+`GET /package-label-assignments` uses `filters[name]` — **scalar, no `[]` suffix** — for all six filters, asserted as exact pairs. This differs from the `filter[x][]` array convention in `tools/issues.py`, correctly so: every filter here is a single value. I did not touch the `locators` vs `locators[]` disagreement; none of my endpoints use it.
+
+## Could not fully resolve from the spec
+
+1. **All-versions spelling.** The spec says "blank for all versions" but never says whether that means an absent key or `""`. The response shape uses `packageVersion: null` and the reconcile endpoint uses key `all`, so I omit the key. Worth one live call to confirm.
+2. **`scopeId` requiredness.** Only the bulk endpoint documents "required if scope is `project` or `revision`". I applied that rule uniformly across all four assignment tools and additionally reject a `scope_id` alongside `org` scope. If FOSSA turns out to want a `scopeId` for `org` scope, that model validator is where to loosen it.
+3. **`POST /organizations/labels`** declares *no* required properties. I made `label` required locally.
+
+## Validation
+
+`uv run pytest -q` → **305 passed** (24 new in `tests/test_labels_tools.py`; baseline was 281), `ruff check` clean, `ruff format --check` clean, `pyright` 0 errors.</result>
+<usage><subagent_tokens>150970</subagent_tokens><tool_uses>43</tool_uses><duration_ms>559314</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a984074bece0f0545</worktreePath><worktreeBranch>worktree-agent-a984074bece0f0545</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a46feecb0e24c1033</task-id>
+<tool-use-id>toolu_01UfNsNfAU19SBMVyb1pJznM</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a46feecb0e24c1033.output</output-file>
+<status>completed</status>
+<summary>Agent "Organization settings grouped tool" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. Branch `parity/org-settings`, one commit `e50de8a` on top of `api-parity`. All green: 321 passed (281 baseline + 40 new), ruff check/format clean, pyright 0 errors.
+
+## Files
+
+- `src/fossa_mcp/models/org_settings.py` — Literals, spec-derived tables, input models
+- `src/fossa_mcp/tools/org_settings.py` — 4 tool functions
+- `tests/test_org_settings_tools.py` — 40 respx contract + refusal tests
+
+## Tools and why this grouping
+
+Four tools cover **all 59 documented operations** in the domain (57 Organization Settings + 2 Organization Limits). Verified mechanically against the spec: 59 documented, 59 reachable, zero unreachable, zero phantom.
+
+| Tool | Ops | Shape |
+|---|---|---|
+| `fossa_org_settings(sections=[...])` | 22 GET | fans out, one request per section, deduped in order |
+| `fossa_update_org_settings(section, action, values, items, fields)` | 23 PUT + 10 PATCH | `action="replace"` → PUT, `action="propagate"` → PATCH |
+| `fossa_delete_org_setting(target)` | 2 DELETE | `saml`, `logo` |
+| `fossa_org_limits(limits=[...])` | 2 GET | separate domain per the plan's table (1 tool) |
+
+The write tool needs both `values` (object body) and `items` (bare JSON array body) because two sections — `languages-pod` and `integrations-custom-license-scans` — take an array, not an object. The model rejects the wrong one for the section.
+
+Two sections are **writable-only** (`saml`, `sbom-report-defaults`) and one is **read-only** (`integrations-slack`). `saml`/`sbomReportDefaults`/`logo` live outside `/settings/` in the API but belong to the same product surface and are folded in via the section→path table; tests pin both asymmetries.
+
+## The Literal section lists
+
+`OrgSettingsSection` (22 readable) — named as the path below `/settings/` with `/`→`-`:
+`authentication`, `general`, `integrations-custom-license-scans`, `integrations-slack`, `languages-bower`, `languages-gem`, `languages-git`, `languages-mvn`, `languages-npm`, `languages-nuget`, `languages-pip`, `languages-pod`, `projects-github-status-checks`, `projects-hidden-snippet-urls`, `projects-issues-container`, `projects-issues-licensing`, `projects-issues-quality`, `projects-issues-security`, `projects-notifications`, `projects-privacy`, `projects-quick-import-scan-methods`, `projects-update-hooks`
+
+`OrgSettingsWritableSection` (23) — the above minus `integrations-slack`, plus `saml` and `sbom-report-defaults`.
+
+`OrgSettingsAction` = `replace` | `propagate`. `OrgSettingsDeleteTarget` = `saml` | `logo`. `OrgLimit` = `contributors` | `release-groups`.
+
+Propagatable sections (10) are the `projects-*` set, each with its own field enum. Body keys, required keys, and propagate fields all came out of a generator over `spec/fossa-openapi.json` — none hand-typed. Validation goes beyond the section: unknown body keys are rejected, and the three sections whose spec marks keys required reject a partial body, because `PUT` replaces the section rather than merging.
+
+## Multi-tier resolution
+
+Resolved by **per-section tier computation inside the tool body** (`_required_tiers`), returning a list of tiers each checked via `require_tier`, rather than one fixed tier at registration. Consequences:
+
+- **`action="propagate"` is `DESTRUCTIVE`, not `WRITE`.** This is the one place I departed from your "PATCH/PUT are WRITE" instruction, and deliberately: `PATCH` on these sections is `propagateOrganization*Settings` — it pushes the org default onto *every existing project*, destroying per-project overrides, with no undo. That is an unbounded target set from one tool call, which `API_PARITY_PLAN.md` "Write tiers" and `DECISIONS.md` §7 both say is `DESTRUCTIVE` regardless of verb. Say the word and it's a one-line change.
+- **`authentication` and `saml` are `ADMIN`.** Neither is reachable with only `FOSSA_ALLOW_WRITES` — pinned by two refusal tests.
+- **`general` escalates per call.** Seven of its nine keys (title, email, label vocabulary) are ordinary `WRITE`; `defaultRoleId` and `disableNonCustomTeamUserRoles` are access control and force `ADMIN`. Marking the whole section `ADMIN` would have meant renaming the org needs admin; marking it `WRITE` would have let the default role for every new member through a write gate.
+- **`DELETE /saml` requires `DESTRUCTIVE` *and* `ADMIN`.** Destructive alone refuses.
+
+No service-account or OIDC section exists in this domain (OIDC is item 8, a separate domain).
+
+## server.py registration snippet
+
+Add `org_settings` to the tools import, then:
+
+```python
+# Organization settings span three write tiers because their sections do — the
+# tier is decided per call inside the tool (see tools/org_settings.py), so the
+# annotation advertises the most dangerous reachable outcome. destructiveHint is
+# True because action="propagate" overwrites the setting on every project in the
+# organization, and because the delete tool removes the SAML configuration.
+# idempotentHint is True: these are PUT/PATCH/DELETE replacements, so a retry
+# converges rather than accumulating.
+_ORG_SETTINGS_WRITE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
+mcp.tool(name="fossa_org_settings", annotations=_READ_ONLY)(org_settings.get_org_settings)
+mcp.tool(name="fossa_org_limits", annotations=_READ_ONLY)(org_settings.get_org_limits)
+mcp.tool(name="fossa_update_org_settings", annotations=_ORG_SETTINGS_WRITE)(
+    org_settings.update_org_settings
+)
+mcp.tool(name="fossa_delete_org_setting", annotations=_ORG_SETTINGS_WRITE)(
+    org_settings.delete_org_setting
+)
+```
+
+I verified FastMCP 1.28 builds correct schemas for all four signatures (including `dict[str, Any] | None` and `list[Any] | None`) and that `_forbid_unexpected_tool_arguments` rebuilds them cleanly. The section enums do appear in the published JSON schema, so an unknown section is a client-side schema error as required.
+
+## Tier-set additions for `test_mcp_integration.py`
+
+```python
+EXPECTED_READ_ONLY_TOOL_NAMES = {
+    ...,
+    "fossa_org_settings",
+    "fossa_org_limits",
+}
+
+EXPECTED_WRITE_TOOL_NAMES = {
+    ...,
+    "fossa_update_org_settings",
+    "fossa_delete_org_setting",
+}
+```
+
+## Flags for you
+
+1. **`client.request_json`'s `json_body` is annotated `dict[str, Any] | None`, but 12 operations in this domain need a bare JSON array body** — the two array-bodied `PUT`s and all ten `PATCH` propagates. Per your instruction I did not edit `client.py`; instead `_request_tolerating_empty_body` in `tools/org_settings.py` casts at one documented call site. The clean fix is widening that parameter to `dict[str, Any] | list[Any] | None` in `request_json`, `request_json_with_status`, and `_request` — annotation-only, no behavior change. Other domains will hit this too.
+2. **The 204/empty-body trap applies to nearly every write here**, not just one: only `PUT /saml` and `PUT /sbomReportDefaults` document a 2xx body at all. I reused the `tools/issues.py` workaround uniformly rather than per-endpoint.
+3. **`FOSSA_ORG_ID` is mandatory for this domain**, unlike in `policies.py` where it gates one optional enrichment. Here the org id *is* the path, so absence raises `FossaConfigurationError` (existing type, not a new convention) before any request — three tests cover it.
+4. **`projects-notifications` accepts five keys on `PUT` but propagates only three.** A real spec asymmetry, enforced and pinned by a test.
+5. `mcp__ccd_session__spawn_task` was unavailable to flag item 1 as a follow-up, so it's here instead.</result>
+<usage><subagent_tokens>189376</subagent_tokens><tool_uses>58</tool_uses><duration_ms>729166</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a46feecb0e24c1033</worktreePath><worktreeBranch>worktree-agent-a46feecb0e24c1033</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a146b91b6f4893314</task-id>
+<tool-use-id>toolu_0123z32k8dUFVHMy2p6bCwb6</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a146b91b6f4893314.output</output-file>
+<status>completed</status>
+<summary>Agent "Teams, roles, users domain" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. Branch `parity/teams` (from `api-parity`), one commit `ba71973`. `uv run pytest -q` → **331 passed** (50 new), `ruff check`, `ruff format --check`, and `pyright` all clean. `server.py`, `test_mcp_integration.py`, `client.py`, and `skills/` untouched.
+
+## Files
+
+- `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a146b91b6f4893314/src/fossa_mcp/models/teams.py`
+- `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a146b91b6f4893314/src/fossa_mcp/tools/teams.py`
+- `/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a146b91b6f4893314/tests/test_teams_tools.py`
+
+## Tools — 14, covering all 34 documented operations
+
+| Tool | Endpoints | Tier |
+|---|---|---|
+| `fossa_list_teams` | `GET /v2/teams`; `GET /teams` (deprecated, behind `include_all_with_members`) | read |
+| `fossa_get_team` | sections: `GET /v2/teams/{id}`, `/teams/{id}/members`, `/teams/{id}/projects`, `/teams/{id}/release-groups` | read |
+| `fossa_list_addable_team_targets` | targets: `GET /teams/{id}/members/addable`, `/teams/{id}/addable-projects-and-release-groups`, `/teams/{id}/release-groups/{releaseGroupId}/addable-projects` | read |
+| `fossa_get_team_groups` | `GET /teams/groups`; `GET /teams/groups/{id}` | read |
+| `fossa_list_roles` | sections: `GET /roles`, `/roles/all-permissions`, `/roles/assignable` | read |
+| `fossa_list_users` | `GET /v2/users`; `GET /users/{id}`; `GET /users` (deprecated, behind `include_all`) | read |
+| `fossa_create_team` | `POST /teams` | ADMIN |
+| `fossa_update_team` | `PUT /teams/{id}` | ADMIN |
+| `fossa_delete_team` | `DELETE /teams/{id}` | ADMIN |
+| `fossa_update_team_assignments` | `PUT /teams/{id}/users`, `PUT /teams/{id}/projects`, `POST` + `DELETE /teams/{id}/release-groups` | ADMIN |
+| `fossa_manage_team_group` | `POST /teams/groups`, `PUT` + `DELETE /teams/groups/{id}` | ADMIN |
+| `fossa_update_team_group_assignments` | `POST /teams/groups/{id}/teams`, `DELETE /teams/groups/{id}/teams/{teamId}`, `PUT /teams/groups/{id}/users` | ADMIN |
+| `fossa_manage_role` | `POST /roles`, `PUT` + `DELETE /roles/{id}` | ADMIN |
+| `fossa_create_service_account` | `POST /users/service-accounts` | ADMIN |
+
+Deletes are ADMIN per your instruction, not DESTRUCTIVE. The one unbounded-target write is `fossa_update_team_assignments` with `all_projects=True` or `project_filters` — flagged in its docstring.
+
+## `server.py` registration snippet
+
+Add to the import line: `from .tools import ..., teams`. Then two new annotation constants and the registrations:
+
+```python
+# Access-control writes. Team, role, and membership updates converge on re-apply
+# (idempotentHint=True); the three tools that can also create a new record via a
+# POST do not, because a replayed create is a second team group or a second role.
+_ADMIN_WRITE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=False,
+    idempotentHint=False,
+    openWorldHint=True,
+)
+
+# Same tier, but these can remove access: a delete, a "remove"/"replace" action,
+# or a filtered assignment whose target set FOSSA resolves server-side.
+_ADMIN_DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False,
+    destructiveHint=True,
+    idempotentHint=True,
+    openWorldHint=True,
+)
+
+mcp.tool(name="fossa_list_teams", annotations=_READ_ONLY)(teams.list_teams)
+mcp.tool(name="fossa_get_team", annotations=_READ_ONLY)(teams.get_team)
+mcp.tool(name="fossa_list_addable_team_targets", annotations=_READ_ONLY)(
+    teams.list_addable_team_targets
+)
+mcp.tool(name="fossa_get_team_groups", annotations=_READ_ONLY)(teams.get_team_groups)
+mcp.tool(name="fossa_list_roles", annotations=_READ_ONLY)(teams.list_roles)
+mcp.tool(name="fossa_list_users", annotations=_READ_ONLY)(teams.list_users)
+
+mcp.tool(name="fossa_create_team", annotations=_ADMIN_WRITE)(teams.create_team)
+mcp.tool(name="fossa_create_service_account", annotations=_ADMIN_WRITE)(
+    teams.create_service_account
+)
+mcp.tool(
+    name="fossa_update_team",
+    annotations=ToolAnnotations(
+        readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True
+    ),
+)(teams.update_team)
+
+mcp.tool(name="fossa_delete_team", annotations=_ADMIN_DESTRUCTIVE)(teams.delete_team)
+mcp.tool(name="fossa_update_team_assignments", annotations=_ADMIN_DESTRUCTIVE)(
+    teams.update_team_assignments
+)
+mcp.tool(name="fossa_update_team_group_assignments", annotations=_ADMIN_DESTRUCTIVE)(
+    teams.update_team_group_assignments
+)
+# manage_* can delete and can create, so they are destructive and not replayable.
+mcp.tool(
+    name="fossa_manage_team_group",
+    annotations=ToolAnnotations(
+        readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True
+    ),
+)(teams.manage_team_group)
+mcp.tool(
+    name="fossa_manage_role",
+    annotations=ToolAnnotations(
+        readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True
+    ),
+)(teams.manage_role)
+```
+
+Verified out-of-tree: all 14 register on a throwaway `FastMCP` and produce valid input schemas.
+
+## `test_mcp_integration.py` tier-set additions
+
+`EXPECTED_READ_ONLY_TOOL_NAMES` += `fossa_list_teams`, `fossa_get_team`, `fossa_list_addable_team_targets`, `fossa_get_team_groups`, `fossa_list_roles`, `fossa_list_users`
+
+`EXPECTED_WRITE_TOOL_NAMES` += `fossa_create_team`, `fossa_update_team`, `fossa_delete_team`, `fossa_update_team_assignments`, `fossa_manage_team_group`, `fossa_update_team_group_assignments`, `fossa_manage_role`, `fossa_create_service_account`
+
+## Notes for the caller
+
+- **Empty-body deletes.** All five deletes here answer with no content (`204` for `DELETE /teams/groups/{id}/teams/{teamId}`, documented content-free `200` for the rest). I reused `tools/issues.py`'s approach with a module-local `_request_tolerating_empty_body`, not `request_text`, because `DELETE /teams/{id}/release-groups` **requires a JSON request body** and `request_text` takes no `json_body`. `client.py` unchanged.
+- **No `qs` array convention anywhere in this domain**, so the `locators` vs `locators[]` inconsistency does not arise. Every query parameter is scalar (`page`, `pageSize`, `search`, `sort`, and `count` on the deprecated user list). No disagreement with siblings to flag.
+- **No percent encoding needed.** Every path parameter is an integer id; project locators appear only in bodies and responses.
+- **Not atomic:** removing several teams from a team group issues one `DELETE` per team, because FOSSA's endpoint takes a single `teamId` in the path. The tool reports the ids that succeeded.
+- **Credential exposure:** `fossa_create_service_account` returns `fullApiToken` / `pushOnlyApiToken` in the 201 body when requested. Both switches default to false and the docstring warns the value is shown once and lands in the transcript. Consider whether the deployment wants it gated harder than ADMIN.
+- **Modeled, but worth knowing:** `PUT /teams/{id}/projects` declares `projects` as a `oneOf` (array of locators, or the literal string `"all"`). A flat tool signature can't express that, so it is split into `projects: list[str]` and `all_projects: bool`, with the model requiring exactly one of `projects` / `all_projects` / `project_filters`.
+- **Spec gaps, not bugs:** `GET /roles/assignable` documents `assignableTeamRoles` as a bare `object` with no properties (it is a team-id → role-id map at runtime), and `GET /users` / `GET /users/{id}` declare several fields as `["string","null"]` unions. All responses are passed through unmodified.
+- The plan's inventory suggested a 7/3/2/2 tool split for these domains; that is exactly what landed.</result>
+<usage><subagent_tokens>198180</subagent_tokens><tool_uses>56</tool_uses><duration_ms>778836</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a146b91b6f4893314</worktreePath><worktreeBranch>worktree-agent-a146b91b6f4893314</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>a77c96f4e43010fc2</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/a77c96f4e43010fc2.output</output-file>
+<status>completed</status>
+<summary>Agent "OIDC and SAML domain" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Branch **`parity/oidc-saml`** (off `api-parity`), commit `cbe6d9b`. Three new files, `server.py` and `test_mcp_integration.py` untouched.
+
+## Shape: 1:1, not grouped
+
+The plan marks OIDC "grouped, ~2 tools." That number came from an endpoint count, not from the operations. These are not the uniform `get/patch/put` section triples that make grouping work — providers, trust relationships, the token exchange, and SAML each have a distinct request body, so a grouped tool would take a union of conditionally-valid arguments (`issuer` only for provider-create, `audiences`/`requiredClaims` only for trust relationships, `cert`/`entryPoint` only for SAML). That is the shape the plan tells you to avoid. Individual tools also match what Projects/Issues/Revisions/Release Groups did on this branch. **13 tools over 13 operations.**
+
+Also: the plan's table says OIDC is 5 GET / 6 write / 2 DEL = 13. The spec has **11** OIDC-tagged operations (5 GET / 4 write / 2 DELETE). The write column is over by 2.
+
+## Tools
+
+| Tool | Endpoint | Tier |
+|---|---|---|
+| `fossa_list_oidc_providers` | `GET /oidc/providers` | read |
+| `fossa_get_oidc_provider` | `GET /oidc/providers/{id}` | read |
+| `fossa_list_oidc_provider_service_accounts` | `GET /oidc/providers/{id}/available-service-accounts` | read |
+| `fossa_list_oidc_trust_relationships` | `GET /oidc/trust-relationships` | read |
+| `fossa_get_oidc_trust_relationship` | `GET /oidc/trust-relationships/{id}` | read |
+| `fossa_create_oidc_provider` | `POST /oidc/providers` | ADMIN |
+| `fossa_delete_oidc_provider` | `DELETE /oidc/providers/{id}` | ADMIN |
+| `fossa_create_oidc_trust_relationship` | `POST /oidc/trust-relationships` | ADMIN |
+| `fossa_update_oidc_trust_relationship` | `PUT /oidc/trust-relationships/{id}` | ADMIN |
+| `fossa_delete_oidc_trust_relationship` | `DELETE /oidc/trust-relationships/{id}` | ADMIN |
+| `fossa_exchange_oidc_token` | `POST /oidc/token-exchange` | ADMIN |
+| `fossa_update_saml_settings` | `PUT /organizations/{id}/saml` | ADMIN |
+| `fossa_delete_saml_settings` | `DELETE /organizations/{id}/saml` | ADMIN |
+
+Full coverage: all 11 OIDC-tagged ops plus the only 2 SAML ops in the spec.
+
+## Credentials — read this part
+
+**No read in this domain can return a credential**, and that is a property of the API, not of my code. FOSSA's OIDC federation is keyless: a provider is `{issuer, scope}`, a trust relationship is `{audiences, requiredClaims}`. There is no client secret field anywhere. `available-service-accounts` returns ids/usernames/emails — identity, not secrets. The SAML `cert` is the IdP's X.509 *public* signing certificate (published in IdP metadata by design); no private key or SP signing key exists in this surface. And there is no `GET /organizations/{id}/saml` at all, so no SAML read tool exists.
+
+**One operation does return a live credential: `POST /oidc/token-exchange`.** Its 200 body contains `credential.token` — a working FOSSA API token. It is a write, not a read, but it is the real exposure here.
+
+What I did: `fossa_exchange_oidc_token` **does not return the token.** It returns the resolved identity (`userId`, `providerId`, `issuer`, `subject`) and credential metadata (`isPushOnly`, `expiration`) with the token replaced by a placeholder and a `token_minted: true` flag. The redaction is an **allow-list**, not a deny-list: only the four documented top-level fields are copied by value, and anything else in the response is reported by *name* under `undocumented_fields`, so a field added to that endpoint later cannot carry a secret into a tool result before a human has looked at it. There is no argument that turns redaction off. Tested by `test_exchange_oidc_token_never_returns_the_minted_token`, the same standard as `test_token_absent_from_tool_output_and_logs`.
+
+The tool is therefore a "does my trust relationship actually work?" verifier, not a way to get a token; the docstring says so, and says the token is still minted and still valid until expiry even though nobody can read it. **This is the judgment call in this branch most worth a second opinion** — the alternative was not exposing the operation at all, which would break the "every operation reachable" rule.
+
+Two other notes on that endpoint: the spec declares it as the API's only **unauthenticated** operation (`security: null`), but `FossaClient` attaches `Authorization` to every request and I did not add a bypass; I could not verify live whether FOSSA minds the extra header. And it is a `POST`, so it is never retried — correct, since a replay would mint a second token.
+
+## Safety behavior added beyond the API
+
+`requiredClaims` with a `sub` value that is nothing but wildcards (`*`, `**`) is refused before any request is built. FOSSA accepts it; it would let every token that issuer ever signs authenticate as the named service account. That is the OIDC equivalent of `locators=all` on the bulk project delete, and it is refused for the same reason. Narrowing patterns like `repo:acme/*` are allowed. Also enforced: the `oneOf` scope/`scopeId` pairing on both create endpoints (a flat signature can't express it), and `organization_id` for SAML falls back to `FOSSA_ORG_ID` but refuses to guess when neither is set.
+
+## `server.py` registration snippet
+
+Add `identity` to the tools import, then:
+
+```python
+# Federated identity. destructiveHint is True for both SAML writes, not only the
+# delete: PUT replaces the organization's entire SSO configuration, and the API
+# documents no endpoint that reads the previous one back, so a wrong call is not
+# recoverable from here.
+_ADMIN_CREATE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True
+)
+_ADMIN_UPDATE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True
+)
+_ADMIN_DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True
+)
+
+mcp.tool(name="fossa_list_oidc_providers", annotations=_READ_ONLY)(identity.list_oidc_providers)
+mcp.tool(name="fossa_get_oidc_provider", annotations=_READ_ONLY)(identity.get_oidc_provider)
+mcp.tool(name="fossa_list_oidc_provider_service_accounts", annotations=_READ_ONLY)(
+    identity.list_oidc_provider_service_accounts
+)
+mcp.tool(name="fossa_list_oidc_trust_relationships", annotations=_READ_ONLY)(
+    identity.list_oidc_trust_relationships
+)
+mcp.tool(name="fossa_get_oidc_trust_relationship", annotations=_READ_ONLY)(
+    identity.get_oidc_trust_relationship
+)
+mcp.tool(name="fossa_create_oidc_provider", annotations=_ADMIN_CREATE)(
+    identity.create_oidc_provider
+)
+mcp.tool(name="fossa_delete_oidc_provider", annotations=_ADMIN_DESTRUCTIVE)(
+    identity.delete_oidc_provider
+)
+mcp.tool(name="fossa_create_oidc_trust_relationship", annotations=_ADMIN_CREATE)(
+    identity.create_oidc_trust_relationship
+)
+mcp.tool(name="fossa_update_oidc_trust_relationship", annotations=_ADMIN_UPDATE)(
+    identity.update_oidc_trust_relationship
+)
+mcp.tool(name="fossa_delete_oidc_trust_relationship", annotations=_ADMIN_DESTRUCTIVE)(
+    identity.delete_oidc_trust_relationship
+)
+mcp.tool(name="fossa_exchange_oidc_token", annotations=_ADMIN_CREATE)(identity.exchange_oidc_token)
+mcp.tool(name="fossa_update_saml_settings", annotations=_ADMIN_DESTRUCTIVE)(
+    identity.update_saml_settings
+)
+mcp.tool(name="fossa_delete_saml_settings", annotations=_ADMIN_DESTRUCTIVE)(
+    identity.delete_saml_settings
+)
+```
+
+I verified all 13 register under FastMCP 1.28 and survive `_forbid_unexpected_tool_arguments` (schemas generate cleanly, `additionalProperties: false` published).
+
+## `test_mcp_integration.py` tier-set additions
+
+`EXPECTED_READ_ONLY_TOOL_NAMES` += `fossa_list_oidc_providers`, `fossa_get_oidc_provider`, `fossa_list_oidc_provider_service_accounts`, `fossa_list_oidc_trust_relationships`, `fossa_get_oidc_trust_relationship`.
+
+`EXPECTED_WRITE_TOOL_NAMES` += `fossa_create_oidc_provider`, `fossa_delete_oidc_provider`, `fossa_create_oidc_trust_relationship`, `fossa_update_oidc_trust_relationship`, `fossa_delete_oidc_trust_relationship`, `fossa_exchange_oidc_token`, `fossa_update_saml_settings`, `fossa_delete_saml_settings`.
+
+## Tests
+
+29 new in `tests/test_identity_tools.py`; suite is **310 passed, 1 deselected**. `ruff check`, `ruff format --check`, and `pyright` all clean. Refusal coverage is all three states (writes off / writes on + admin off / admin on + writes off), each iterating all 8 writes and asserting `respx_mock.calls.call_count == 0`.
+
+## Flags for whoever integrates
+
+- **The two SAML operations are tagged `Organization Settings` in the spec.** Whoever builds the 57-operation grouped Org Settings tool (item 7) must exclude `PUT`/`DELETE /organizations/{id}/saml` or they will be implemented twice at two different tiers.
+- **Empty-body deletes:** all three deletes use `client.request_text` (the `tools/projects.py` workaround) because `request_json` raises on a 204 or an empty 200. `client.py` untouched, as instructed.
+- **Deletes are ADMIN only, not ADMIN + DESTRUCTIVE.** `require_tier` takes a single tier and the brief said ADMIN without exception. If you want `DELETE /organizations/{id}/saml` to also demand `FOSSA_ALLOW_DESTRUCTIVE`, that needs a second `require_tier` call or a multi-tier signature — say the word and I'll add it.
+- Nothing in the domain was unmodelable. Every request body came from the spec; no field was inferred.</result>
+<usage><subagent_tokens>173438</subagent_tokens><tool_uses>58</tool_uses><duration_ms>720115</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-a77c96f4e43010fc2</worktreePath><worktreeBranch>worktree-agent-a77c96f4e43010fc2</worktreeBranch></worktree>
+</task-notification>
+
+---
+
+<task-notification>
+<task-id>ac02a0e45114bd228</task-id>
+<tool-use-id>toolu_01V9Bg6WFcGurpdonLxsGnrS</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-rashford-Library-Mobile-Documents-com-apple-CloudDocs-Developer-fossa-mcp/899a85f2-f3de-4884-af5c-d4ca8f9faf54/tasks/ac02a0e45114bd228.output</output-file>
+<status>completed</status>
+<summary>Agent "Integrations long tail" finished</summary>
+<note>A task-notification fires each time this agent stops with no live background children of its own. The user can send it another message and resume it, so the same task-id may notify more than once.</note>
+<result>Done. Branch `parity/integrations`, one commit (`9f2c2a7`) off `api-parity`, three new files, nothing else touched.
+
+## Tools — 15 over all 28 operations
+
+| Tool | Endpoint(s) | Tier |
+|---|---|---|
+| `fossa_get_jira_configurations` | `GET /jira` | read |
+| `fossa_save_jira_configuration` | `POST /jira` (create) / `PATCH /jira/{id}` (update) | WRITE |
+| `fossa_delete_jira_configuration` | `DELETE /jira/{id}` | DESTRUCTIVE |
+| `fossa_get_fossabot_status` | `GET /fossabot/status` | read |
+| `fossa_list_fossabot_upgrade_prs` | `GET /fossabot/dependency-upgrade-prs` (+ `/counts` when `include_counts`) | read |
+| `fossa_get_fossabot_upgrade_pr` | `GET /fossabot/issues/{issueId}/dependency-upgrade-pr` | read |
+| `fossa_request_fossabot_upgrade_pr` | `POST .../dependency-upgrade-pr` / `.../retry` | WRITE |
+| `fossa_list_report_options` | `GET /report-options` | read |
+| `fossa_save_report_option` | `POST /report-options` / `PUT /report-options/{id}` | WRITE |
+| `fossa_delete_report_option` | `DELETE /report-options/{id}` | DESTRUCTIVE |
+| `fossa_set_custom_risk_score` | `POST` / `PATCH /custom-risk-scores/{issueId}` | WRITE |
+| `fossa_delete_custom_risk_score` | `DELETE /custom-risk-scores/{issueId}` | DESTRUCTIVE |
+| `fossa_list_snippets` | 7 GETs: `snippets`, `/count`, `/packages`, `/paths`, and the 3 `compare/{older}/{status}` forms | read |
+| `fossa_get_snippet` | `GET .../snippets/{snippetId}` (+ `/matches/{path}`) | read |
+| `fossa_set_snippet_rejection` | `POST .../snippets/reject` / `/unreject` | WRITE **or** DESTRUCTIVE, decided at call time |
+
+15 rather than the budgeted 12. The three extra are all deletes: a tool carries one tier and one annotation set, so the Jira, report-option, and risk-score deletes can't ride along with their create/update tools. Everything else collapsed as planned (save = create+update, 7 snippet GETs into one `view` tool).
+
+## Credentials
+
+`POST /jira` and `PATCH /jira/{id}` bodies, and the `GET /jira` response, all carry **`credentials.basic.username` / `.password`**. The same objects also carry **`headers`** (arbitrary HTTP headers — where a Jira API token normally lives) and **`webhookURL`**, a capability URL that authenticates whoever holds it.
+
+What I did:
+- All three are accepted as input — the integration is unconfigurable otherwise — but `_redact_jira_configuration` strips all three from **every** response, including the write tools' echo of what was applied, replacing them with `credentials_redacted: {username_set, password_set}`, `headers_redacted: {header_names}` (names only, never values), and `webhook_url_set`. FOSSA documents the password as "obfuscated when retrieved"; nothing relies on that.
+- Two tests serialize the whole tool result to JSON and assert none of `hunter2`, `fossa-svc`, `Bearer s3cr3t`, or the webhook token appears anywhere in it.
+- The `fossa_save_jira_configuration` docstring warns that credentials passed through a tool call land in the calling client's transcript, and recommends setting them in the FOSSA web app.
+
+## `server.py` registration snippet
+
+Add to the imports: `from .tools import ..., integrations, ...`
+
+```python
+# Creates and updates: not read-only, not destructive. idempotentHint is False
+# because POST /jira and POST /report-options accumulate — a replay is a
+# duplicate site or a duplicate preset.
+_INTEGRATION_WRITE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True
+)
+_INTEGRATION_DESTRUCTIVE = ToolAnnotations(
+    readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True
+)
+
+mcp.tool(name="fossa_get_jira_configurations", annotations=_READ_ONLY)(
+    integrations.get_jira_configurations
+)
+mcp.tool(name="fossa_save_jira_configuration", annotations=_INTEGRATION_WRITE)(
+    integrations.save_jira_configuration
+)
+mcp.tool(name="fossa_delete_jira_configuration", annotations=_INTEGRATION_DESTRUCTIVE)(
+    integrations.delete_jira_configuration
+)
+mcp.tool(name="fossa_get_fossabot_status", annotations=_READ_ONLY)(
+    integrations.get_fossabot_status
+)
+mcp.tool(name="fossa_list_fossabot_upgrade_prs", annotations=_READ_ONLY)(
+    integrations.list_fossabot_upgrade_prs
+)
+mcp.tool(name="fossa_get_fossabot_upgrade_pr", annotations=_READ_ONLY)(
+    integrations.get_fossabot_upgrade_pr
+)
+mcp.tool(name="fossa_request_fossabot_upgrade_pr", annotations=_INTEGRATION_WRITE)(
+    integrations.request_fossabot_upgrade_pr
+)
+mcp.tool(name="fossa_list_report_options", annotations=_READ_ONLY)(
+    integrations.list_report_options
+)
+mcp.tool(name="fossa_save_report_option", annotations=_INTEGRATION_WRITE)(
+    integrations.save_report_option
+)
+mcp.tool(name="fossa_delete_report_option", annotations=_INTEGRATION_DESTRUCTIVE)(
+    integrations.delete_report_option
+)
+mcp.tool(name="fossa_set_custom_risk_score", annotations=_INTEGRATION_WRITE)(
+    integrations.set_custom_risk_score
+)
+mcp.tool(name="fossa_delete_custom_risk_score", annotations=_INTEGRATION_DESTRUCTIVE)(
+    integrations.delete_custom_risk_score
+)
+mcp.tool(name="fossa_list_snippets", annotations=_READ_ONLY)(integrations.list_snippets)
+mcp.tool(name="fossa_get_snippet", annotations=_READ_ONLY)(integrations.get_snippet)
+# Conditionally destructive: annotated at its worst case, since a filter-shaped
+# call can suppress every snippet match in a revision.
+mcp.tool(name="fossa_set_snippet_rejection", annotations=_INTEGRATION_DESTRUCTIVE)(
+    integrations.set_snippet_rejection
+)
+```
+
+Verified out-of-tree: all 15 register on a real `FastMCP` and produce valid JSON schemas under the `extra="forbid"` rebuild (`save_jira_configuration` 19 params, `list_snippets` 15, the rest smaller).
+
+## `test_mcp_integration.py` tier-set additions
+
+`EXPECTED_READ_ONLY_TOOL_NAMES` += `fossa_get_jira_configurations`, `fossa_get_fossabot_status`, `fossa_list_fossabot_upgrade_prs`, `fossa_get_fossabot_upgrade_pr`, `fossa_list_report_options`, `fossa_list_snippets`, `fossa_get_snippet`
+
+`EXPECTED_WRITE_TOOL_NAMES` += `fossa_save_jira_configuration`, `fossa_delete_jira_configuration`, `fossa_request_fossabot_upgrade_pr`, `fossa_save_report_option`, `fossa_delete_report_option`, `fossa_set_custom_risk_score`, `fossa_delete_custom_risk_score`, `fossa_set_snippet_rejection`
+
+## Validation
+
+`uv run pytest -q` → **324 passed, 1 deselected** (43 new in `tests/test_integrations_tools.py`). `ruff check`, `ruff format --check`, `pyright` all clean.
+
+## Notes and things worth flagging
+
+- **`client.request_json` on 204.** Five operations here answer 204 (Jira PATCH, both snippet reject endpoints, both deletes) and two of those carry a JSON body, so `request_text` (the `projects.py` idiom) doesn't apply. I duplicated `_request_tolerating_empty_body` from `tools/issues.py` rather than touch `client.py`; the docstring says so and says the real fix belongs in the transport layer. That helper now exists twice — worth consolidating in a pass that owns `client.py`.
+- **Snippet query arrays use plain repeated keys**, not `key[]=`. The vendored spec puts brackets in the parameter *name* wherever FOSSA wants them (`locators[]`, `depth[]`); none of `ids`, `packageIds`, `rejectionStatus`, `packageLabels`, `vendoredMatch` have them.
+- **`fossa_set_custom_risk_score` requires an explicit `action`.** FOSSA publishes no read endpoint for a custom risk score, so the tool cannot discover whether one exists and POST-vs-PATCH cannot be inferred. Guessing would turn a wrong guess into a 4xx; the parameter is a `Literal["create","update"]`.
+- **Report options: 26 booleans, expressed as two on-lists.** `sections` and `dependency_data` name what should be ON; the tool sends every switch in a supplied group explicitly. An omitted group is not sent, which is what makes `PUT`'s deep merge usable. Create rejects a missing group locally rather than letting FOSSA 400.
+- **`GET /revisions/{locator}/snippets/{snippetId}/matches/{path}` has an untyped `matchDetails`** in the spec (no declared schema) and returns matched source lines. It's the only unbounded payload here; it's capped at `FOSSA_REPORT_MAX_CHARS` and returned as truncated JSON text with `truncated` / `original_char_count` when the cap bites.
+- **Nothing in these domains was left unmodeled.** All 28 operations are reachable. One adjacent gap belongs to Issues, not here: the Issues commit notes it did not expose the `PUT /v2/issues` `export` body variant because it needs the Jira configuration surface — that variant is still unexposed, and now that `GET /jira` exists someone could revisit it.</result>
+<usage><subagent_tokens>214156</subagent_tokens><tool_uses>72</tool_uses><duration_ms>895150</duration_ms></usage>
+<worktree><worktreePath>/Users/rashford/Library/Mobile Documents/com~apple~CloudDocs/Developer/fossa-mcp/.claude/worktrees/agent-ac02a0e45114bd228</worktreePath><worktreeBranch>worktree-agent-ac02a0e45114bd228</worktreeBranch></worktree>
+</task-notification>
