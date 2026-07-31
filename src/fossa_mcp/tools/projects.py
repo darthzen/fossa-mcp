@@ -13,13 +13,18 @@ docstring:
   like `securityPolicyId` and `securityIssueScanningEnabled` were confirmed
   against a live organization, not read out of the spec. Every tool here passes
   FOSSA's JSON through unmodified rather than modeling it.
-* **The bulk endpoints take `locators`, not `locators[]`.** That is the name the
-  spec declares for `DELETE /v2/projects` and `PUT /v2/projects/labels`, and the
-  bracket form is not worth guessing on a delete: if FOSSA ignored the parameter
-  the request would degrade into "every project matching the filters", which for
-  a filterless call is the whole organization. Repeating the plain name is
-  parsed as an array by the API's query parser and, under any parser that does
-  not, degrades to a single locator instead.
+* **The query-string bulk endpoints take `locators[]`, not plain `locators`.**
+  This was verified against a live organization on every one of them. The
+  server parses its query string with `qs` and its schema demands an array (or
+  the literal `"all"`): one plain `locators=<x>` parses as a *string* and is
+  rejected with `400 "expected array, received string"`, while two or more
+  parse as an array and happen to work. The bracketed form is an array at any
+  length, so it is the only form that is correct for a one-project call. The
+  spec's plain parameter name is a spec defect, not the wire format.
+
+  `POST /v2/projects` is the exception and is not affected: it takes a JSON
+  body, where the key is plain `locators` with a real array value — see
+  `_project_filter_body`.
 """
 
 from typing import Any
@@ -449,7 +454,7 @@ async def apply_project_label(
 
     params: list[tuple[str, str]] = [("labelId", str(validated.label_id))]
     for locator in validated.project_locators:
-        params.append(("locators", locator))
+        params.append(("locators[]", locator))
 
     result = await client.request_json("PUT", "/v2/projects/labels", params=params)
 
@@ -598,7 +603,7 @@ async def delete_projects(
     # Locators only. No filter parameter is sent, so there is nothing for FOSSA
     # to widen the target set with.
     params: list[tuple[str, str]] = [
-        ("locators", locator) for locator in validated.project_locators
+        ("locators[]", locator) for locator in validated.project_locators
     ]
 
     body, _ = await client.request_text("DELETE", "/v2/projects", params=params)

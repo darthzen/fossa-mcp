@@ -77,6 +77,11 @@ async def test_list_projects_switches_to_post_for_an_oversized_locator_filter(
 
 @pytest.mark.asyncio
 async def test_list_projects_stays_on_get_for_a_short_filter(settings, respx_mock, make_context):
+    """A single locator goes over the wire as `locators[]`, not plain `locators`.
+
+    `GET /v2/projects` rejects one plain `locators=<x>` with a `400`; it parses
+    as a string and the endpoint's schema wants an array.
+    """
     route = respx_mock.get(f"{BASE}/v2/projects").mock(
         return_value=httpx.Response(200, json={"projects": []})
     )
@@ -85,8 +90,10 @@ async def test_list_projects_stays_on_get_for_a_short_filter(settings, respx_moc
     result = await projects.list_projects(make_context(client, settings), locators=[PROJECT])
     await client.aclose()
 
+    pairs = _query_pairs(route.calls.last.request)
     assert route.calls.last.request.method == "GET"
-    assert ("locators[]", PROJECT) in _query_pairs(route.calls.last.request)
+    assert ("locators[]", PROJECT) in pairs
+    assert ("locators", PROJECT) not in pairs
     assert result["endpoint"] == "GET /v2/projects"
 
 
@@ -359,11 +366,37 @@ async def test_apply_project_label_query_and_partial_failure(
     assert request.method == "PUT"
     assert _query_pairs(request) == [
         ("labelId", "4"),
-        ("locators", PROJECT),
-        ("locators", OTHER_PROJECT),
+        ("locators[]", PROJECT),
+        ("locators[]", OTHER_PROJECT),
     ]
     assert result["data"]["succeeded"] == [PROJECT]
     assert result["data"]["failures"] == {OTHER_PROJECT: "Insufficient permissions"}
+
+
+@pytest.mark.asyncio
+async def test_apply_project_label_brackets_a_single_locator(
+    writable_settings, respx_mock, make_context
+):
+    """One locator is the case the plain `locators` form got wrong.
+
+    FOSSA parses the query string with `qs`: a single plain `locators=<x>`
+    arrives as a string and the endpoint's schema rejects it with
+    `400 "expected array, received string"`. Two or more plain occurrences parse
+    as an array and work, which is why the bug stayed hidden. `locators[]` is an
+    array at every length.
+    """
+    route = respx_mock.put(f"{BASE}/v2/projects/labels").mock(
+        return_value=httpx.Response(200, json={})
+    )
+
+    client = FossaClient(writable_settings)
+    await projects.apply_project_label(make_context(client, writable_settings), 4, [PROJECT])
+    await client.aclose()
+
+    assert _query_pairs(route.calls.last.request) == [
+        ("labelId", "4"),
+        ("locators[]", PROJECT),
+    ]
 
 
 @pytest.mark.asyncio
@@ -449,14 +482,28 @@ async def test_delete_projects_sends_only_explicit_locators(
 
     request = route.calls.last.request
     assert request.method == "DELETE"
-    # No filter parameter may accompany a bulk delete: if FOSSA ignored
-    # `locators` the request would degrade into a filter-wide delete.
+    # No filter parameter may accompany a bulk delete: with the locator list
+    # gone the request would degrade into a filter-wide delete.
     assert _query_pairs(request) == [
-        ("locators", PROJECT),
-        ("locators", OTHER_PROJECT),
+        ("locators[]", PROJECT),
+        ("locators[]", OTHER_PROJECT),
     ]
     assert result["endpoint"] == "DELETE /v2/projects"
     assert result["data"]["deleted"] == [PROJECT, OTHER_PROJECT]
+
+
+@pytest.mark.asyncio
+async def test_delete_projects_brackets_a_single_locator(
+    destructive_settings, respx_mock, make_context
+):
+    """A one-project delete must still send an array-shaped parameter."""
+    route = respx_mock.delete(f"{BASE}/v2/projects").mock(return_value=httpx.Response(200))
+
+    client = FossaClient(destructive_settings)
+    await projects.delete_projects(make_context(client, destructive_settings), [PROJECT])
+    await client.aclose()
+
+    assert _query_pairs(route.calls.last.request) == [("locators[]", PROJECT)]
 
 
 @pytest.mark.asyncio
