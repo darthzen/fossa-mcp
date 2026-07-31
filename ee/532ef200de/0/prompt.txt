@@ -93,3 +93,7 @@ mcp.tool(name="fossa_delete_projects", annotations=_PROJECT_DESTRUCTIVE)(project
 6. **`GET /projects/{locator}/labels`** is tagged `Project Labels` in the spec rather than `Projects`; I covered it here because it is addressed by project locator, but flag it in case the Labels domain agent also claims it.</result>
 <usage><subagent_tokens>162795</subagent_tokens><tool_uses>30</tool_uses><duration_ms>558215</duration_ms></usage>
 </task-notification>
+
+---
+
+Do the checkpoint
