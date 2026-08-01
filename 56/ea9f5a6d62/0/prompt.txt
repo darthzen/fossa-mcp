@@ -1,0 +1,9 @@
+Change to the ~/Developer/neuvector-mcp directory and read the project handoff. What are next steps?
+
+---
+
+Change to the ~/Developer/neuvector-mcp directory and read the project handoff. What are next steps?
+
+---
+
+Go ahead and clear the cherry pick. Proceed with next steps.
