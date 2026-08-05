@@ -46,9 +46,9 @@ Both sensor writes wrap the body in `{"config": {...}}`.
 - `op` is `regex` or `!regex`. **`!regex` is supported and round-trips.** The
   tool layer defaults it to `regex` when omitted.
 - `context` is `url` | `header` | `body` | `packet`. **The tool layer defaults
-  it to `packet`** — the one value whose matching behaviour is still UNVERIFIED
-  below. Always pass `context` explicitly; an omitted `context` is not a
-  neutral choice.
+  it to `packet`** — one of the two values whose matching behaviour is still
+  UNVERIFIED (`body` is the other; `header` and `url` are verified below).
+  Always pass `context` explicitly; an omitted `context` is not a neutral choice.
 - `rules` **REPLACES** the sensor's entire rule list on PATCH. Omitted rules are
   deleted silently.
 
@@ -125,6 +125,29 @@ consistent with the observations above — but both behave correctly for the
 two-pattern `present AND not-allowlisted` shape, which is the only shape this
 skill emits. A bare single-pattern `!regex` on a header name remains untested
 and should still be avoided.
+
+## The url-context question — VERIFIED 2026-08-04 (enforcer on sdf1)
+
+**`context: "url"` matches the request path. Positive substring patterns fire.**
+Established with a live paired probe against `ollama-exporter` (LoadBalancer
+`192.168.7.160:9400`, group `nv.ollama-exporter.ai` in Discover):
+
+- `GET /api/v1/read` and `GET /-/config` each fired the rule written against that
+  path — patterns `(?i)/api/v1/read` and `(?i)/-/config`, `op: regex`,
+  `context: url`. Both surfaced as `WAF.<sensor>.<rule>` threat events with
+  `action: alert`, `side=server`, `server_port: 9400`.
+- A clean `GET /metrics` produced **zero** events — a substring pattern on a
+  path the service does not serve does not false-positive on the paths it does.
+- **The app returned 404 for both attack paths and the rules fired anyway** — the
+  enforcer inspects the inbound request in the data path before the app answers.
+  A `url` canary can therefore be validated against an endpoint the app does not
+  yet serve, which is what makes the pre-position canary a probeable control and
+  not an act of faith.
+
+Do **not** anchor a `url` pattern with a leading `^/`. Whether the matched string
+carries the method or scheme ahead of the path was not pinned down, so `^/…` may
+silently never match; an unanchored substring on a signature legitimate traffic
+never produces is both safe and sufficient.
 
 The paired probe remains the required validation for every *new* sensor: it
 verifies the allowlist enumeration and the regex itself, not just the matching
